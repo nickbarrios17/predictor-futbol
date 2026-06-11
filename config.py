@@ -13,7 +13,7 @@ N_SIMULATIONS      = 10_000
 HOME_ADVANTAGE     = 1.10  # Ajustado un poco hacia abajo para mundiales
 
 # ── API SofaScore (RapidAPI) ──────────────────────────────────
-RAPIDAPI_KEY = "e915d661d0msh34d68258377003ep10876ejsn50c84a2a9841"
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 # ── IA local con Ollama ───────────────────────────────────────
 OLLAMA_MODEL   = "llama3.1:8b"

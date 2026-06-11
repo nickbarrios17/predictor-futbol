@@ -1,0 +1,13 @@
+{
+  "stage": "league_normal",
+  "motivation_a": "normal",
+  "motivation_b": "normal",
+  "lineup_status_a": "unknown",
+  "lineup_status_b": "unknown",
+  "injuries_a": [],
+  "injuries_b": [],
+  "is_second_leg": false,
+  "first_leg_score": null,
+  "notes": "",
+  "confidence": "low"
+}
