@@ -1,0 +1,10 @@
+numpy
+scipy
+pandas
+httpx
+beautifulsoup4
+googlesearch-python
+requests
+ollama
+reportlab
+python-dateutil

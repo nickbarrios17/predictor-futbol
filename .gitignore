@@ -1,0 +1,15 @@
+# Archivos de entorno y claves
+.env
+config.py  # Si decides dejar la clave aquí, no lo subas.
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Carpetas de Streamlit/logs
+.streamlit/
