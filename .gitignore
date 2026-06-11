@@ -1,6 +1,5 @@
 # Archivos de entorno y claves
 .env
-config.py  # Si decides dejar la clave aquí, no lo subas.
 
 # Entornos virtuales
 .venv/
