@@ -1,0 +1,162 @@
+[
+  {
+    "date": "2024-10-15",
+    "team_home": "Congo Republic",
+    "team_away": "South Africa",
+    "goals_home": 1,
+    "goals_away": 1,
+    "competition": "Africa Cup of Nations, Qualification, Group K"
+  },
+  {
+    "date": "2024-11-15",
+    "team_home": "Uganda",
+    "team_away": "South Africa",
+    "goals_home": 0,
+    "goals_away": 2,
+    "competition": "Africa Cup of Nations, Qualification, Group K"
+  },
+  {
+    "date": "2024-11-19",
+    "team_home": "South Africa",
+    "team_away": "South Sudan",
+    "goals_home": 3,
+    "goals_away": 0,
+    "competition": "Africa Cup of Nations, Qualification, Group K"
+  },
+  {
+    "date": "2025-03-09",
+    "team_home": "Egypt",
+    "team_away": "South Africa",
+    "goals_home": 1,
+    "goals_away": 3,
+    "competition": "Int. Friendly Games"
+  },
+  {
+    "date": "2025-03-21",
+    "team_home": "South Africa",
+    "team_away": "Lesotho",
+    "goals_home": 0,
+    "goals_away": 3,
+    "competition": "FIFA World Cup, Qualification CAF, Group C"
+  },
+  {
+    "date": "2025-03-25",
+    "team_home": "Benin",
+    "team_away": "South Africa",
+    "goals_home": 0,
+    "goals_away": 2,
+    "competition": "FIFA World Cup, Qualification CAF, Group C"
+  },
+  {
+    "date": "2025-06-04",
+    "team_home": "South Africa",
+    "team_away": "Mozambique",
+    "goals_home": 0,
+    "goals_away": 1,
+    "competition": "COSAFA Cup, Group A"
+  },
+  {
+    "date": "2025-06-06",
+    "team_home": "South Africa",
+    "team_away": "Tanzania",
+    "goals_home": 0,
+    "goals_away": 0,
+    "competition": "Int. Friendly Games"
+  },
+  {
+    "date": "2025-06-07",
+    "team_home": "South Africa",
+    "team_away": "Zimbabwe",
+    "goals_home": 2,
+    "goals_away": 0,
+    "competition": "COSAFA Cup, Group A"
+  },
+  {
+    "date": "2025-06-10",
+    "team_home": "South Africa",
+    "team_away": "Mauritius",
+    "goals_home": 0,
+    "goals_away": 0,
+    "competition": "COSAFA Cup, Group A"
+  },
+  {
+    "date": "2025-06-10",
+    "team_home": "South Africa",
+    "team_away": "Mozambique",
+    "goals_home": 2,
+    "goals_away": 0,
+    "competition": "Int. Friendly Games"
+  },
+  {
+    "date": "2025-06-13",
+    "team_home": "South Africa",
+    "team_away": "Comoros",
+    "goals_home": 3,
+    "goals_away": 1,
+    "competition": "COSAFA Cup, Knockout stage"
+  },
+  {
+    "date": "2025-06-15",
+    "team_home": "Angola",
+    "team_away": "South Africa",
+    "goals_home": 3,
+    "goals_away": 0,
+    "competition": "COSAFA Cup, Knockout stage"
+  },
+  {
+    "date": "2025-08-08",
+    "team_home": "Algeria",
+    "team_away": "South Africa",
+    "goals_home": 1,
+    "goals_away": 1,
+    "competition": "African Nations Championship, Group C"
+  },
+  {
+    "date": "2025-08-11",
+    "team_home": "South Africa",
+    "team_away": "Guinea",
+    "goals_home": 2,
+    "goals_away": 1,
+    "competition": "African Nations Championship, Group C"
+  },
+  {
+    "date": "2025-08-15",
+    "team_home": "Niger",
+    "team_away": "South Africa",
+    "goals_home": 0,
+    "goals_away": 0,
+    "competition": "African Nations Championship, Group C"
+  },
+  {
+    "date": "2025-08-18",
+    "team_home": "South Africa",
+    "team_away": "Uganda",
+    "goals_home": 3,
+    "goals_away": 3,
+    "competition": "African Nations Championship, Group C"
+  },
+  {
+    "date": "2025-09-05",
+    "team_home": "Lesotho",
+    "team_away": "South Africa",
+    "goals_home": 0,
+    "goals_away": 3,
+    "competition": "FIFA World Cup, Qualification CAF, Group C"
+  },
+  {
+    "date": "2025-09-09",
+    "team_home": "South Africa",
+    "team_away": "Nigeria",
+    "goals_home": 1,
+    "goals_away": 1,
+    "competition": "FIFA World Cup, Qualification CAF, Group C"
+  },
+  {
+    "date": "2025-10-10",
+    "team_home": "Zimbabwe",
+    "team_away": "South Africa",
+    "goals_home": 0,
+    "goals_away": 0,
+    "competition": "FIFA World Cup, Qualification CAF, Group C"
+  }
+]
