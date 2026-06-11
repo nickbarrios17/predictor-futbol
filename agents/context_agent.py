@@ -12,23 +12,27 @@ from config import OLLAMA_MODEL
 def get_match_context(team_a: str, team_b: str,
                       competition: str = "", 
                       racha_a: str = "", 
-                      racha_b: str = "") -> dict:
+                      racha_b: str = "",
+                      noticias: str = None) -> dict: # <--- AGREGAMOS ESTO
     """
-    Busca noticias del partido y extrae el contexto
-    usando la IA local. Devuelve un dict estructurado.
+    Busca noticias del partido o usa las noticias pasadas por parámetro
+    y extrae el contexto usando la IA local.
     """
-    print(f"  🤖 Buscando contexto: {team_a} vs {team_b}...")
+    print(f"  🤖 Obteniendo contexto para: {team_a} vs {team_b}...")
 
-    query = f"{team_a} vs {team_b} {competition} preview lineup 2026"
-    urls  = search_web(query, n=3)
-
-    texto = ""
-    if urls:
-        texto = fetch_multiple(urls, max_chars=2500)
+    # Si nos pasaron noticias desde app.py (a través de predictor), usamos esas.
+    # Si no (es None), hacemos la búsqueda interna.
+    if noticias:
+        texto = noticias
     else:
-        print("  ⚠️  Sin resultados web. Usando contexto neutro.")
-        # 👇 FIX: Frenar la función si no hay info web
-        return _default_context()
+        print("  🔍 No se recibieron noticias, buscando internamente...")
+        query = f"{team_a} vs {team_b} {competition} preview lineup 2026"
+        urls  = search_web(query, n=3)
+        if urls:
+            texto = fetch_multiple(urls, max_chars=2500)
+        else:
+            print("  ⚠️ Sin resultados web. Usando contexto neutro.")
+            return _default_context()
 
     return _extract_with_ai(texto, team_a, team_b, competition, racha_a, racha_b)
 
@@ -76,7 +80,7 @@ Respond ONLY with the JSON, no extra text.
         raw = response["message"]["content"].strip()
         return _parse_json(raw)
     except Exception as e:
-        print(f"  ⚠️  Error en IA: {e}")
+        print(f"  ⚠️ Error en IA: {e}")
         return _default_context()
 
 def _parse_json(raw: str) -> dict:
@@ -93,7 +97,7 @@ def _parse_json(raw: str) -> dict:
 
 def _default_context() -> dict:
     return {
-        "stage":           "league_normal",
+        "stage":          "league_normal",
         "motivation_a":    "normal",
         "motivation_b":    "normal",
         "lineup_status_a": "unknown",

@@ -31,6 +31,7 @@ def predecir(
     competition: str = "",
     team_type: str = "default",
     verbose: bool = False,
+    noticias: str = None,
 ) -> dict:
     """
     venue: "home_a" | "home_b" | "neutral"
@@ -56,6 +57,7 @@ def predecir(
         competition=competition,
         racha_a=_racha_resumen(strength_a),
         racha_b=_racha_resumen(strength_b),
+        noticias=noticias, 
     )
 
     context = MatchContext(
@@ -79,6 +81,9 @@ def predecir(
     resultado["equipo_a"] = equipo_a
     resultado["equipo_b"] = equipo_b
     resultado["venue"] = venue
+    # Guardar noticias en context_raw para el reporte de app.py
+    if noticias:
+        ctx_data["_noticias_raw"] = noticias
     resultado["context_raw"] = ctx_data
     resultado["strength_a"] = strength_a
     resultado["strength_b"] = strength_b
