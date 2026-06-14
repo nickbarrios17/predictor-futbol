@@ -2,7 +2,7 @@
 import requests
 import time
 from datetime import datetime
-from config import RAPIDAPI_KEY 
+from config import RAPIDAPI_KEY
 
 BASE_URL = "https://sofascore.p.rapidapi.com"
 HEADERS = {
@@ -10,83 +10,116 @@ HEADERS = {
     "X-RapidAPI-Host": "sofascore.p.rapidapi.com"
 }
 
+
 def search_team(name: str) -> list[dict]:
-    """Busca equipos y devuelve una lista de diccionarios {id, name}."""
-    time.sleep(1.5)
+    """Busca equipos por nombre y devuelve lista de {id, name}."""
+    time.sleep(1.0)
     url = f"{BASE_URL}/teams/search"
-    querystring = {"name": name}
-    
     try:
-        resp = requests.get(url, headers=HEADERS, params=querystring, timeout=10)
+        resp = requests.get(url, headers=HEADERS,
+                            params={"name": name}, timeout=10)
         resp.raise_for_status()
-        data = resp.json()
-        teams = data.get("teams", [])
-        
-        # Filtramos resultados
-        resultados = []
-        for t in teams:
-            # Filtramos por fútbol
-            if t.get("sport", {}).get("slug") == "football":
-                resultados.append({
-                    "id": t.get("id"),
-                    "name": t.get("name", "Desconocido")
-                })
-        return resultados
+        teams = resp.json().get("teams", [])
+        return [
+            {"id": t["id"], "name": t.get("name", "?")}
+            for t in teams
+            if t.get("sport", {}).get("slug") == "football"
+        ]
     except Exception as e:
         print(f"  ⚠️ Error en search_team: {e}")
         return []
 
-def get_team_matches(team_id: int, limit: int = 25) -> list[dict]:
-    """Obtiene los últimos partidos de un equipo con debug integrado."""
-    time.sleep(1.5)
-    url = f"{BASE_URL}/teams/get-last-matches"
-    querystring = {"teamId": str(team_id)}
-    
-    try:
-        resp = requests.get(url, headers=HEADERS, params=querystring, timeout=10)
-        resp.raise_for_status()
-        json_data = resp.json()
-        
-        # --- DEBUG LOGS ---
-        print(f"DEBUG API: Respuesta recibida para ID {team_id}")
-        # Intentamos obtener eventos de la estructura estándar
-        raw_events = json_data.get("events", [])
-        print(f"DEBUG API: Cantidad de eventos encontrados: {len(raw_events)}")
-        
-        if len(raw_events) == 0:
-            print("DEBUG API: No hay eventos. JSON puede estar vacío o en otra estructura.")
-            return []
 
-    except Exception as e:
-        print(f"  ⚠️ Error en get_team_matches: {e}")
-        return []
+def get_team_matches(team_id: int, limit: int = 20) -> list[dict]:
+    """
+    Obtiene los últimos N partidos finalizados de un equipo.
 
-    # Filtrar solo partidos finalizados
-    finished_matches = [
-        m for m in raw_events 
-        if m.get("status", {}).get("code") == 100 or m.get("status", {}).get("type") == "finished"
-    ]
-    
-    # Parsear
-    parsed_matches = [_parse_match(m) for m in finished_matches if _is_valid(m)]
-    return parsed_matches[:limit]
+    SofaScore devuelve los partidos en páginas de ~10.
+    Paginamos hasta tener suficientes partidos o agotar las páginas.
+    Los resultados vienen ordenados de más reciente a más viejo.
+    """
+    all_matches = []
+    page = 0
+    max_pages = 5  # máximo 50 partidos (5 páginas × 10)
+
+    while len(all_matches) < limit and page < max_pages:
+        time.sleep(1.0)
+        url = f"{BASE_URL}/teams/get-last-matches"
+        params = {"teamId": str(team_id), "page": str(page)}
+
+        try:
+            resp = requests.get(url, headers=HEADERS,
+                                params=params, timeout=10)
+            resp.raise_for_status()
+            data      = resp.json()
+            raw_events = data.get("events", [])
+
+            print(f"  📡 Página {page}: {len(raw_events)} eventos")
+
+            if not raw_events:
+                # Sin más partidos
+                break
+
+            # Filtrar finalizados con score válido
+            for m in raw_events:
+                status = m.get("status", {})
+                finished = (
+                    status.get("code") == 100
+                    or status.get("type") == "finished"
+                )
+                if finished and _is_valid(m):
+                    all_matches.append(_parse_match(m))
+
+            page += 1
+
+        except Exception as e:
+            print(f"  ⚠️ Error en get_team_matches página {page}: {e}")
+            break
+
+    # Ordenar de más reciente a más viejo y limitar
+    all_matches.sort(key=lambda x: x["date"], reverse=True)
+
+    print(f"  ✅ Total partidos válidos obtenidos: {len(all_matches)}")
+    return all_matches[:limit]
+
 
 def _is_valid(m: dict) -> bool:
-    """Valida si el partido tiene datos de goles."""
-    home_score = m.get("homeScore", {})
-    away_score = m.get("awayScore", {})
-    return home_score.get("current") is not None and away_score.get("current") is not None
+    """El partido tiene resultado completo."""
+    hs = m.get("homeScore", {})
+    as_ = m.get("awayScore", {})
+    return (
+        hs.get("current") is not None
+        and as_.get("current") is not None
+    )
+
 
 def _parse_match(m: dict) -> dict:
-    """Extrae la información relevante del JSON crudo."""
-    timestamp = m.get("startTimestamp", 0)
-    match_date = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
-    
+    """
+    Convierte el evento crudo de SofaScore al formato interno.
+    Incluye todos los campos que necesitan strength.py y context.py.
+    """
+    ts         = m.get("startTimestamp", 0)
+    match_date = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+
+    # Nombre de la ronda (útil para detectar stakes)
+    round_info = m.get("roundInfo", {})
+    round_name = round_info.get("name", "") or round_info.get("nameCode", "") or ""
+
+    # Nombre completo de la competición
+    tournament  = m.get("tournament", {})
+    competition = tournament.get("name", "Unknown")
+
+    # Categoría (ayuda a distinguir mundiales de amistosos)
+    category = tournament.get("category", {}).get("name", "")
+
     return {
-        "date": match_date,
-        "team_home": m.get("homeTeam", {}).get("name", "Unknown"),
-        "team_away": m.get("awayTeam", {}).get("name", "Unknown"),
-        "goals_home": m.get("homeScore", {}).get("current"),
-        "goals_away": m.get("awayScore", {}).get("current"),
-        "competition": m.get("tournament", {}).get("name", "Unknown")
+        "date":        match_date,
+        "team_home":   m.get("homeTeam", {}).get("name", "Unknown"),
+        "team_away":   m.get("awayTeam", {}).get("name", "Unknown"),
+        "goals_home":  m.get("homeScore", {}).get("current", 0),
+        "goals_away":  m.get("awayScore", {}).get("current", 0),
+        "competition": competition,
+        "category":    category,
+        "round":       round_name,
+        "context":     {},  # se puede enriquecer después con la IA
     }

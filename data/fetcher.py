@@ -1,20 +1,30 @@
 # data/fetcher.py
 """
-Obtiene el historial de partidos de un equipo, con:
-  - Matching por similitud de nombre (no solo "el primero").
-  - Caché local en disco para no repetir consultas el mismo día.
+Obtiene el historial de partidos de un equipo.
+
+Cambios clave respecto a versión anterior:
+  - La caché ahora guarda la fecha de creación dentro del JSON,
+    no depende solo del mtime del archivo (más confiable en Windows).
+  - force_refresh=True para invalidar caché manualmente.
+  - Mejor logging del estado de la caché.
 """
 import os
 import json
 import time
 import difflib
+from datetime import datetime, timezone
 
 from sources.api_source import search_team, get_team_matches
 from config import CACHE_DIR, CACHE_HOURS_TEAMS, N_MATCHES
 
+TEAMS_CACHE_DIR = os.path.join(CACHE_DIR, "teams")
+os.makedirs(TEAMS_CACHE_DIR, exist_ok=True)
+
+
+# ── Caché ─────────────────────────────────────────────────────
 
 def _cache_path(team_id) -> str:
-    return os.path.join(CACHE_DIR, "teams", f"{team_id}.json")
+    return os.path.join(TEAMS_CACHE_DIR, f"{team_id}.json")
 
 
 def _read_cache(team_id) -> list[dict] | None:
@@ -22,98 +32,148 @@ def _read_cache(team_id) -> list[dict] | None:
     if not os.path.exists(path):
         return None
 
-    age_hours = (time.time() - os.path.getmtime(path)) / 3600
-    if age_hours > CACHE_HOURS_TEAMS:
-        return None
-
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
+            data = json.load(f)
+
+        # La caché guarda la hora de creación dentro del JSON
+        saved_at_str = data.get("_saved_at")
+        if not saved_at_str:
+            # Caché vieja sin timestamp → invalidar
+            print(f"  🗑️  Caché sin timestamp → descartando")
+            return None
+
+        saved_at = datetime.fromisoformat(saved_at_str)
+        now      = datetime.now(timezone.utc).replace(tzinfo=None)
+        age_h    = (now - saved_at.replace(tzinfo=None)).total_seconds() / 3600
+
+        if age_h > CACHE_HOURS_TEAMS:
+            print(f"  🗑️  Caché vencida ({age_h:.1f}h > {CACHE_HOURS_TEAMS}h) → actualizando")
+            return None
+
+        matches = data.get("matches", [])
+        print(f"  📦 Caché válida ({age_h:.1f}h) → {len(matches)} partidos")
+        return matches
+
+    except (json.JSONDecodeError, OSError, ValueError):
         return None
 
 
 def _write_cache(team_id, matches: list[dict]) -> None:
-    os.makedirs(os.path.join(CACHE_DIR, "teams"), exist_ok=True)
     path = _cache_path(team_id)
     try:
+        data = {
+            "_saved_at": datetime.now(timezone.utc).isoformat(),
+            "matches":   matches,
+        }
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(matches, f, ensure_ascii=False, indent=2)
+            json.dump(data, f, ensure_ascii=False, indent=2)
     except OSError as e:
-        print(f"  ⚠️  No se pudo escribir caché para {team_id}: {e}")
+        print(f"  ⚠️  No se pudo escribir caché: {e}")
 
+
+def clear_cache(team_id=None):
+    """
+    Borra la caché de un equipo específico o de todos.
+    Útil para forzar actualización de datos.
+    """
+    if team_id:
+        path = _cache_path(team_id)
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"  🗑️  Caché borrada para ID {team_id}")
+    else:
+        for f in os.listdir(TEAMS_CACHE_DIR):
+            if f.endswith(".json"):
+                os.remove(os.path.join(TEAMS_CACHE_DIR, f))
+        print("  🗑️  Toda la caché de equipos borrada")
+
+
+# ── Matching de nombre ────────────────────────────────────────
 
 def _best_match(team_name: str, candidatos: list[dict]) -> dict | None:
     """
-    Elige el candidato cuyo nombre sea más parecido a team_name,
-    en vez de asumir que el primero es siempre el correcto.
+    Elige el candidato más parecido al nombre buscado.
+    Primero busca match exacto, luego por similitud.
     """
     if not candidatos:
         return None
 
-    nombre_buscado = team_name.strip().lower()
+    nombre_lower = team_name.strip().lower()
 
-    mejor = None
-    mejor_score = -1.0
-
+    # Match exacto
     for c in candidatos:
-        nombre_candidato = c.get("name", "").strip().lower()
+        if c.get("name", "").strip().lower() == nombre_lower:
+            return c
 
-        if nombre_candidato == nombre_buscado:
-            return c  # match exacto, listo
-
-        score = difflib.SequenceMatcher(None, nombre_buscado, nombre_candidato).ratio()
+    # Match por similitud
+    mejor       = None
+    mejor_score = -1.0
+    for c in candidatos:
+        score = difflib.SequenceMatcher(
+            None, nombre_lower,
+            c.get("name", "").strip().lower()
+        ).ratio()
         if score > mejor_score:
             mejor_score = score
             mejor = c
 
-    # Umbral mínimo de similitud para evitar mapear a un equipo totalmente distinto
     if mejor_score < 0.4:
-        print(
-            f"  ⚠️  Coincidencia muy baja ({mejor_score:.2f}) entre "
-            f"'{team_name}' y '{mejor.get('name')}'. Verificá el nombre del equipo."
-        )
-
+        print(f"  ⚠️  Coincidencia baja ({mejor_score:.2f}) → "
+              f"'{team_name}' mapeado a '{mejor.get('name')}'. "
+              f"Verificá el nombre.")
     return mejor
 
 
-def fetch_matches(team_name: str, team_type: str = "default") -> list[dict]:
+# ── Función principal ─────────────────────────────────────────
+
+def fetch_matches(team_name: str,
+                  team_type: str = "default",
+                  force_refresh: bool = False) -> list[dict]:
     """
-    Busca partidos en la API de SofaScore para un equipo dado.
-    Usa matching por similitud de nombre y caché local para no
-    repetir la misma consulta varias veces el mismo día.
+    Busca los últimos partidos de un equipo.
+
+    Flujo:
+      1. Buscar el equipo en la API para obtener su ID
+      2. Revisar caché local (si existe y es reciente, usarla)
+      3. Si no hay caché válida, consultar la API con paginación
     """
-    print(f"DEBUG: Consultando equipo: {team_name}")
+    print(f"\nDEBUG: Consultando equipo: {team_name}")
 
     candidatos = search_team(team_name)
-
     if not candidatos:
-        print(f"DEBUG: ¡Alerta! No se encontró ningún equipo llamado '{team_name}' en la API.")
+        print(f"  ❌ No se encontró '{team_name}' en la API.")
         return []
 
-    equipo_encontrado = _best_match(team_name, candidatos)
-    if equipo_encontrado is None:
+    equipo = _best_match(team_name, candidatos)
+    if not equipo:
         return []
 
-    id_encontrado = equipo_encontrado["id"]
-    nombre_encontrado = equipo_encontrado["name"]
+    team_id   = equipo["id"]
+    team_name_api = equipo["name"]
+    print(f"DEBUG: Equipo '{team_name}' mapeado a '{team_name_api}' (ID: {team_id})")
 
-    print(f"DEBUG: Equipo '{team_name}' mapeado a '{nombre_encontrado}' (ID: {id_encontrado})")
+    # Forzar limpieza si se pide
+    if force_refresh:
+        clear_cache(team_id)
 
-    # 1. Intentar caché
-    cached = _read_cache(id_encontrado)
+    # Intentar caché
+    cached = _read_cache(team_id)
     if cached is not None:
-        print(f"DEBUG: Usando caché ({len(cached)} partidos) para ID {id_encontrado}")
         return cached
 
-    # 2. Consultar API
-    limit = N_MATCHES.get(team_type, N_MATCHES["default"])
-    matches = get_team_matches(id_encontrado, limit=limit)
+    # Consultar API con paginación
+    limit   = N_MATCHES.get(team_type, N_MATCHES["default"])
+    # Pedimos más de lo necesario para tener margen de filtrado
+    matches = get_team_matches(team_id, limit=limit + 10)
 
     if not matches:
-        print(f"DEBUG: ¡Alerta! La API devolvió 0 partidos para el ID {id_encontrado}")
-    else:
-        print(f"DEBUG: Se obtuvieron {len(matches)} partidos válidos para el ID {id_encontrado}")
-        _write_cache(id_encontrado, matches)
+        print(f"  ❌ La API no devolvió partidos para ID {team_id}")
+        return []
 
-    return matches
+    print(f"DEBUG: Se obtuvieron {len(matches)} partidos válidos para el ID {team_id}")
+
+    # Guardar en caché con timestamp
+    _write_cache(team_id, matches)
+
+    return matches[:limit]

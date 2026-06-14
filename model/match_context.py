@@ -1,9 +1,16 @@
-# model/match_context.py
+# model/match_context.py — v1.1
 """
-Representa el contexto del partido que se quiere predecir.
-Calcula los multiplicadores que ajustan los lambdas finales.
+Representa el contexto del partido a predecir.
+
+Cambios v1.1:
+  - H2H reducido de 20% a 5% (FIX Problema 3).
+  - H2H solo se aplica si hay >= H2H_MIN_MATCHES partidos
+    en los últimos H2H_MAX_YEARS años.
+  - FIX Bug 2: sin redondeo interno en h2h_adjustment.
 """
-from config import MATCH_INTENSITY, TEAM_MOTIVATION, H2H_WEIGHT
+from datetime import date, datetime
+from config import (MATCH_INTENSITY, TEAM_MOTIVATION,
+                    H2H_WEIGHT, H2H_MIN_MATCHES, H2H_MAX_YEARS)
 
 
 class MatchContext:
@@ -38,52 +45,88 @@ class MatchContext:
         return TEAM_MOTIVATION.get(mot, 1.00)
 
     def second_leg_adjustment(self) -> tuple[float, float]:
-        """
-        En partidos de vuelta ajusta los lambdas según
-        el resultado de la ida.
-        """
         if not self.is_second_leg or not self.first_leg_score:
             return 1.0, 1.0
-
         ga, gb = self.first_leg_score
         diff   = ga - gb
-
-        # Cuanto más grande la diferencia, más extremo el ajuste
         if   diff >=  2: return 0.88, 1.15
         elif diff ==  1: return 0.93, 1.08
         elif diff ==  0: return 1.00, 1.00
         elif diff == -1: return 1.08, 0.93
         else:            return 1.15, 0.88
 
+    def _h2h_validos(self) -> list:
+        """
+        Filtra los partidos H2H por antigüedad.
+        Solo usa los de los últimos H2H_MAX_YEARS años.
+        """
+        if not self.h2h_matches:
+            return []
+
+        cutoff = date.today().replace(
+            year=date.today().year - H2H_MAX_YEARS
+        )
+        validos = []
+        for m in self.h2h_matches:
+            try:
+                fecha_str = m.get("date", "")
+                if fecha_str:
+                    fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+                else:
+                    # Si no tiene fecha, asumir que es válido
+                    validos.append(m)
+                    continue
+                if fecha >= cutoff:
+                    validos.append(m)
+            except (ValueError, TypeError):
+                validos.append(m)
+
+        return validos
+
     def h2h_adjustment(self, lam_a: float,
                         lam_b: float) -> tuple[float, float]:
         """
-        Mezcla los lambdas con el historial H2H.
-        80% forma reciente + 20% H2H.
+        FIX Problema 3:
+        - Solo aplica si hay >= H2H_MIN_MATCHES partidos válidos.
+        - Solo usa H2H de los últimos H2H_MAX_YEARS años.
+        - Peso reducido de 20% a 5%.
+        - Sin redondeo interno (Bug 2).
         """
-        if not self.h2h_matches:
+        h2h = self._h2h_validos()
+
+        if len(h2h) < H2H_MIN_MATCHES:
+            # No hay suficientes H2H recientes → ignorar completamente
+            if h2h:
+                print(f"  ℹ️  H2H ignorado: {len(h2h)} partidos "
+                      f"(mínimo {H2H_MIN_MATCHES})")
             return lam_a, lam_b
 
-        avg_a = sum(m["goals_a"] for m in self.h2h_matches) \
-                / len(self.h2h_matches)
-        avg_b = sum(m["goals_b"] for m in self.h2h_matches) \
-                / len(self.h2h_matches)
+        avg_a = sum(m.get("goals_a", 0) for m in h2h) / len(h2h)
+        avg_b = sum(m.get("goals_b", 0) for m in h2h) / len(h2h)
 
-        w = H2H_WEIGHT
-        return (
-            round((1 - w) * lam_a + w * avg_a, 3),
-            round((1 - w) * lam_b + w * avg_b, 3),
-        )
+        w = H2H_WEIGHT   # 0.05
+        lam_a_adj = (1 - w) * lam_a + w * avg_a
+        lam_b_adj = (1 - w) * lam_b + w * avg_b
+
+        print(f"  ℹ️  H2H aplicado: {len(h2h)} partidos | "
+              f"peso: {w*100:.0f}% | "
+              f"avg goles: {avg_a:.2f}-{avg_b:.2f}")
+
+        # Sin redondear internamente (Bug 2)
+        return lam_a_adj, lam_b_adj
 
     def summary(self) -> dict:
+        h2h_validos = self._h2h_validos()
         return {
-            "competition":  self.competition,
-            "stage":        self.stage,
-            "intensity":    self.intensity(),
-            "motivation_a": self.motivation_a,
-            "motivation_b": self.motivation_b,
-            "second_leg":   self.is_second_leg,
-            "h2h_matches":  len(self.h2h_matches),
-            "confidence":   self.confidence,
-            "notes":        self.notes,
+            "competition":    self.competition,
+            "stage":          self.stage,
+            "intensity":      self.intensity(),
+            "motivation_a":   self.motivation_a,
+            "motivation_b":   self.motivation_b,
+            "second_leg":     self.is_second_leg,
+            "h2h_total":      len(self.h2h_matches),
+            "h2h_validos":    len(h2h_validos),
+            "h2h_aplicado":   len(h2h_validos) >= H2H_MIN_MATCHES,
+            "confidence":     self.confidence,
+            "notes":          self.notes,
         }
