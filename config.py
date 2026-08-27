@@ -21,9 +21,8 @@ MAX_MONTHS_HISTORY = 30
 DECAY_RATE         = 0.08
 N_SIMULATIONS      = 10_000
 
-# ── IA local ───────────────────────────────────────────────────
-OLLAMA_MODEL = "llama3.1:8b"
-OLLAMA_HOST  = "http://localhost:11434"
+# ── Gemini ─────────────────────────────────────────────────────
+GEMINI_MODEL = "gemini-3.6-flash"
 
 # ── Caché ──────────────────────────────────────────────────────
 CACHE_DIR         = "cache"

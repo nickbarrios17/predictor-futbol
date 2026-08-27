@@ -39,6 +39,7 @@ def get_team_matches(team_id: int, limit: int = 20) -> list[dict]:
     Los resultados vienen ordenados de más reciente a más viejo.
     """
     all_matches = []
+    seen_ids    = set()
     page = 0
     max_pages = 5  # máximo 50 partidos (5 páginas × 10)
 
@@ -61,13 +62,21 @@ def get_team_matches(team_id: int, limit: int = 20) -> list[dict]:
                 break
 
             # Filtrar finalizados con score válido
+            # SofaScore a veces repite eventos entre páginas consecutivas,
+            # por eso se deduplica por ID de evento.
             for m in raw_events:
+                event_id = m.get("id")
+                if event_id is not None and event_id in seen_ids:
+                    continue
+
                 status = m.get("status", {})
                 finished = (
                     status.get("code") == 100
                     or status.get("type") == "finished"
                 )
                 if finished and _is_valid(m):
+                    if event_id is not None:
+                        seen_ids.add(event_id)
                     all_matches.append(_parse_match(m))
 
             page += 1

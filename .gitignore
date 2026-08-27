@@ -12,3 +12,9 @@ __pycache__/
 
 # Carpetas de Streamlit/logs
 .streamlit/
+
+credentials*.json
+cache/
+database/*.db
+database/*.db-*
+*.zip
