@@ -184,7 +184,7 @@ def save_prediction(resultado: dict,
     top           = resultado.get("top_marcadores", [])
     predicted_score = top[0][0] if top else ""
     competition   = ctx.get("competition") or ctx_sum.get("competition") or ""
-    match_date    = ctx.get("match_date", "")
+    match_date    = resultado.get("match_date") or ctx.get("match_date", "")
 
     row = {
         "created_at":       datetime.now(timezone.utc).isoformat(),

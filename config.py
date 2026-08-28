@@ -40,6 +40,15 @@ CACHE_DIR         = "cache"
 CACHE_HOURS_TEAMS = 24
 CACHE_HOURS_CTX   = 6
 
+# Proximos partidos de un equipo: pueden reprogramarse, TTL corto.
+CACHE_HOURS_NEXT_MATCHES        = 12
+# Fixture de un torneo completo (todas las fechas futuras): cuesta
+# ~1 pedido por equipo de la fecha (28 equipos en una liga de 14
+# partidos), asi que conviene un TTL largo. Pensado para uso semanal
+# (una fecha por vez), asi que 6 dias cubre toda la semana sin
+# gastar cuota de nuevo y se refresca solo para la fecha siguiente.
+CACHE_HOURS_TOURNAMENT_FIXTURES = 24 * 6
+
 # ── Ventaja local ──────────────────────────────────────────────
 # FIX Bug 3: HOME_ADVANTAGE solo se aplica en la simulación final.
 # Ya NO se usa en strength.py para dividir el peso histórico.

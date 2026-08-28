@@ -250,6 +250,13 @@ def _construir_brief(resultado: dict, matches_a: list,
     role_b  = "local"     if venue == "home_b" else \
               "visitante" if venue == "home_a" else "neutral"
 
+    # Version en texto humano de la sede — el codigo interno
+    # ("home_a"/"home_b") confundia a la IA, que lo interpretaba
+    # como "cancha neutral" al no reconocerlo como un valor valido.
+    sede_txt = ("Cancha neutral" if venue == "neutral"
+                else f"{ea} juega de LOCAL" if venue == "home_a"
+                else f"{eb} juega de LOCAL")
+
     stats_a_txt = _formato_stats_sede(stats_a, ea, role_a)
     stats_b_txt = _formato_stats_sede(stats_b, eb, role_b)
 
@@ -287,7 +294,7 @@ def _construir_brief(resultado: dict, matches_a: list,
 ╚══════════════════════════════════════════════════════════════╝
 
 COMPETICIÓN : {resultado.get('context', {}).get('competition') or ctx.get('competition') or 'Desconocida'}
-SEDE        : {venue}  ({ea} juega como {role_a} | {eb} juega como {role_b})
+SEDE        : {sede_txt}  ({ea} juega como {role_a} | {eb} juega como {role_b})
 TIPO        : {ctx.get('stage', 'league_normal')}
 MOTIVACIÓN  : {ea} → {ctx.get('motivation_a','normal')} | {eb} → {ctx.get('motivation_b','normal')}
 ALINEACIÓN  : {ea} → {ctx.get('lineup_status_a','unknown')} | {eb} → {ctx.get('lineup_status_b','unknown')}

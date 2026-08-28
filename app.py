@@ -12,6 +12,7 @@ import streamlit as st
 
 from ui.backtesting_tab import render_backtesting_tab
 from ui.common import apply_global_styles, init_session_state
+from ui.fixtures_tab import render_fixtures_tab
 from ui.history_tab import render_history_tab
 from ui.prediction_tab import render_prediction_tab
 from ui.worldcup_tab import render_worldcup_tab
@@ -29,8 +30,9 @@ init_session_state()
 st.markdown("# ⚽ Predictor de Futbol")
 st.markdown("Modelo estadistico · Poisson + Dixon-Coles + Gemini · v2.2")
 
-tab_pred, tab_hist, tab_back, tab_wc = st.tabs([
+tab_pred, tab_fx, tab_hist, tab_back, tab_wc = st.tabs([
     "🎯 Prediccion",
+    "📅 Por Equipo/Torneo",
     "📋 Historial",
     "📊 Backtesting",
     "🏆 Mundial 2026",
@@ -38,6 +40,9 @@ tab_pred, tab_hist, tab_back, tab_wc = st.tabs([
 
 with tab_pred:
     render_prediction_tab()
+
+with tab_fx:
+    render_fixtures_tab()
 
 with tab_hist:
     render_history_tab()
