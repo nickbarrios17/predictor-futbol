@@ -86,6 +86,7 @@ def imprimir_reporte(r: dict, verbose: bool = False):
         print(f"  Base:       {ld['base']}")
         print(f"  Intensidad: {ld['intensity']}")
         print(f"  Motivación: {ld['motivation']}")
+        print(f"  Alineación: {ld.get('lineup', (1.0, 1.0))}")
         print(f"  Vuelta:     {ld['second_leg']}")
         print(f"  Final:      {ld['final']}{RESET}")
 
