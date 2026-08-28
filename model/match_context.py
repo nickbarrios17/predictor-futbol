@@ -1,6 +1,13 @@
-# model/match_context.py — v1.1
+# model/match_context.py — v1.2
 """
 Representa el contexto del partido a predecir.
+
+Cambios v1.2:
+  - lineup_status_a/b ahora afecta el lambda del partido a predecir,
+    no solo el peso de partidos historicos. Antes la IA detectaba
+    bajas/rotacion desde las noticias y esa info solo aparecia en el
+    texto narrativo de Gemini, sin tocar las probabilidades del
+    modelo estadistico.
 
 Cambios v1.1:
   - H2H reducido de 20% a 5% (FIX Problema 3).
@@ -9,7 +16,7 @@ Cambios v1.1:
   - FIX Bug 2: sin redondeo interno en h2h_adjustment.
 """
 from datetime import date, datetime
-from config import (MATCH_INTENSITY, TEAM_MOTIVATION,
+from config import (MATCH_INTENSITY, TEAM_MOTIVATION, LINEUP_WEIGHT,
                     H2H_WEIGHT, H2H_MIN_MATCHES, H2H_MAX_YEARS)
 
 
@@ -21,6 +28,8 @@ class MatchContext:
         stage:            str   = "league_normal",
         motivation_a:     str   = "normal",
         motivation_b:     str   = "normal",
+        lineup_status_a:  str   = "unknown",
+        lineup_status_b:  str   = "unknown",
         h2h_matches:      list  = None,
         is_second_leg:    bool  = False,
         first_leg_score:  tuple = None,
@@ -31,6 +40,8 @@ class MatchContext:
         self.stage           = stage
         self.motivation_a    = motivation_a
         self.motivation_b    = motivation_b
+        self.lineup_status_a = lineup_status_a
+        self.lineup_status_b = lineup_status_b
         self.h2h_matches     = h2h_matches or []
         self.is_second_leg   = is_second_leg
         self.first_leg_score = first_leg_score
@@ -43,6 +54,18 @@ class MatchContext:
     def motivation_factor(self, team: str) -> float:
         mot = self.motivation_a if team == "a" else self.motivation_b
         return TEAM_MOTIVATION.get(mot, 1.00)
+
+    def lineup_factor(self, team: str) -> float:
+        """
+        Penaliza el lambda del equipo si las noticias indican que va
+        a jugar rotado/con reservas. Si el estado es desconocido no
+        se aplica ningun ajuste (factor 1.0) — no hay que penalizar
+        por falta de informacion, que es el caso mas comun.
+        """
+        status = self.lineup_status_a if team == "a" else self.lineup_status_b
+        if not status or status == "unknown":
+            return 1.00
+        return LINEUP_WEIGHT.get(status, 1.00)
 
     def second_leg_adjustment(self) -> tuple[float, float]:
         if not self.is_second_leg or not self.first_leg_score:
@@ -123,6 +146,8 @@ class MatchContext:
             "intensity":      self.intensity(),
             "motivation_a":   self.motivation_a,
             "motivation_b":   self.motivation_b,
+            "lineup_status_a":self.lineup_status_a,
+            "lineup_status_b":self.lineup_status_b,
             "second_leg":     self.is_second_leg,
             "h2h_total":      len(self.h2h_matches),
             "h2h_validos":    len(h2h_validos),

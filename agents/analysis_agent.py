@@ -137,6 +137,7 @@ def _formato_lambdas_detalle(lambdas: dict, ea: str, eb: str) -> str:
     base    = lambdas.get("base",       ("?", "?"))
     intens  = lambdas.get("intensity",  "?")
     motiv   = lambdas.get("motivation", ("?", "?"))
+    lineup  = lambdas.get("lineup",     (1.0, 1.0))
     vuelta  = lambdas.get("second_leg", (1.0, 1.0))
     final   = lambdas.get("final",      ("?", "?"))
 
@@ -144,6 +145,7 @@ def _formato_lambdas_detalle(lambdas: dict, ea: str, eb: str) -> str:
   λ base (ataque × defensa rival, ya incluye ventaja de sede) → {ea}: {base[0]}  |  {eb}: {base[1]}
   Multiplicador intensidad         → ×{intens} (finales bajan, grupos con presión suben)
   Multiplicador motivación         → {ea}: ×{motiv[0]}  |  {eb}: ×{motiv[1]}
+  Multiplicador alineación         → {ea}: ×{lineup[0]}  |  {eb}: ×{lineup[1]} (baja si el equipo rota o juega con reservas)
   Multiplicador vuelta             → {ea}: ×{vuelta[0]}  |  {eb}: ×{vuelta[1]}
   λ FINAL usado en simulación      → {ea}: {final[0]}  |  {eb}: {final[1]}"""
 

@@ -26,15 +26,20 @@ from model.match_context import MatchContext
 def _get_avg(competition: str) -> tuple[float, float]:
     """
     Devuelve (avg_home_goals, avg_away_goals) de la competición.
-    Usa la asimetría real: equipos locales marcan más que visitantes.
+
+    Ambos valores son iguales a propósito: la ventaja de localía ya
+    la capturan por separado attack_home/attack_away y
+    defense_home/defense_away de cada equipo (ver strength.py), que
+    salen del propio historial local/visitante del equipo. Aplicar
+    ademas un +10%/-10% aca duplicaba el efecto (un equipo con split
+    real de 2.5 vs 0.9 goles quedaba en ~3.4 vs 0.8 en vez de 2.5 vs 0.9).
     """
     comp_lower = competition.lower()
     for key, avg in LEAGUE_AVG_GOALS.items():
         if key.lower() in comp_lower:
-            # Distribución típica: 58% local / 42% visitante
-            return avg * 1.10, avg * 0.90
+            return avg, avg
     avg = LEAGUE_AVG_GOALS["default"]
-    return avg * 1.10, avg * 0.90
+    return avg, avg
 
 
 def simular(
@@ -99,6 +104,9 @@ def simular(
 
     lambda_a *= ctx.motivation_factor("a")
     lambda_b *= ctx.motivation_factor("b")
+
+    lambda_a *= ctx.lineup_factor("a")
+    lambda_b *= ctx.lineup_factor("b")
 
     mult_a, mult_b = ctx.second_leg_adjustment()
     lambda_a *= mult_a
@@ -171,6 +179,8 @@ def simular(
             "intensity":  intensity,
             "motivation": (ctx.motivation_factor("a"),
                            ctx.motivation_factor("b")),
+            "lineup":     (ctx.lineup_factor("a"),
+                           ctx.lineup_factor("b")),
             "second_leg": (mult_a, mult_b),
             "final":      (round(lambda_a, 3), round(lambda_b, 3)),
         }

@@ -106,6 +106,8 @@ def predecir(
         stage           = ctx_data.get("stage",           "league_normal"),
         motivation_a    = ctx_data.get("motivation_a",    "normal"),
         motivation_b    = ctx_data.get("motivation_b",    "normal"),
+        lineup_status_a = ctx_data.get("lineup_status_a", "unknown"),
+        lineup_status_b = ctx_data.get("lineup_status_b", "unknown"),
         is_second_leg   = ctx_data.get("is_second_leg",   False),
         first_leg_score = (tuple(ctx_data["first_leg_score"])
                            if ctx_data.get("first_leg_score") else None),

@@ -417,6 +417,7 @@ def render_prediction_tab() -> None:
     | Base (incluye ventaja de sede) | `{ld.get('base',('—','—'))[0]}` | `{ld.get('base',('—','—'))[1]}` |
     | Intensidad | `×{ld.get('intensity','—')}` | `×{ld.get('intensity','—')}` |
     | Motivación | `×{ld.get('motivation',('—','—'))[0]}` | `×{ld.get('motivation',('—','—'))[1]}` |
+    | Alineación | `×{ld.get('lineup',(1,1))[0]}` | `×{ld.get('lineup',(1,1))[1]}` |
     | Vuelta | `×{ld.get('second_leg',(1,1))[0]}` | `×{ld.get('second_leg',(1,1))[1]}` |
     | **Final** | **`{ld.get('final',('—','—'))[0]}`** | **`{ld.get('final',('—','—'))[1]}`** |
     """)
