@@ -284,7 +284,7 @@ def _construir_brief(resultado: dict, matches_a: list,
   DATOS PARA ANÁLISIS: {ea} vs {eb}
 ╚══════════════════════════════════════════════════════════════╝
 
-COMPETICIÓN : {ctx.get('competition') or 'Desconocida'}
+COMPETICIÓN : {resultado.get('context', {}).get('competition') or ctx.get('competition') or 'Desconocida'}
 SEDE        : {venue}  ({ea} juega como {role_a} | {eb} juega como {role_b})
 TIPO        : {ctx.get('stage', 'league_normal')}
 MOTIVACIÓN  : {ea} → {ctx.get('motivation_a','normal')} | {eb} → {ctx.get('motivation_b','normal')}
