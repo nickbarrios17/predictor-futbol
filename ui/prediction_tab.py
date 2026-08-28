@@ -434,7 +434,7 @@ def render_prediction_tab() -> None:
                             f"| Marcador: **{ia.get('marcador_predicho','—')}** "
                             f"| Confianza: **{ia.get('confianza','—')}**")
 
-        st.caption("⚽ Poisson + Monte Carlo 10k iter. | 🧠 Gemini | 📡 SofaScore API | 🗄️ SQLite + Google Sheets")
+        st.caption("⚽ Poisson + Dixon-Coles | 🧠 Gemini | 📡 SofaScore API | 🗄️ SQLite + Google Sheets")
 
 
     # ══════════════════════════════════════════════════════════════

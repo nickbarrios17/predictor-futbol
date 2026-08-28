@@ -138,7 +138,6 @@ def calcular_lambda(matches: list[dict], team_name: str,
                 "w_time":      w_time,
                 "w_comp":      pesos["w_comp"],
                 "w_stakes":    pesos["w_stakes"],
-                "w_lineup":    pesos["w_lineup"],
                 "w_total":     w,
             })
 

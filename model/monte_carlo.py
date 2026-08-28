@@ -1,25 +1,36 @@
-# model/monte_carlo.py — v1.1
+# model/monte_carlo.py — v2.0
 """
-Simulación Monte Carlo con Poisson.
+Modelo de marcador Dixon-Coles (Poisson bivariado con correccion de
+baja puntuacion), calculado de forma analitica en vez de por
+simulacion Monte Carlo.
 
-Cambios v1.1:
-  - Nueva fórmula de lambda usando attack/defense por sede.
+Cambios v2.0:
+  - Se reemplazo el muestreo aleatorio (rng.poisson × N_SIMULATIONS)
+    por una grilla de probabilidad exacta P(x, y) para cada posible
+    marcador, con la correccion tau de Dixon & Coles (1997) aplicada
+    a los marcadores bajos (0-0, 1-0, 0-1, 1-1). Dos ventajas:
+      1. Es la pieza que faltaba para llamarse "Dixon-Coles" de
+         verdad — antes solo se usaba su formula de ataque×defensa,
+         sin la correccion de correlacion que le da nombre al metodo.
+      2. Es determinista: la misma prediccion con los mismos datos
+         ya no cambia levemente cada vez que se recalcula.
+  - El nombre del archivo quedo igual por compatibilidad con el
+    resto del proyecto (predictor.py, backtesting, worldcup.py),
+    aunque ya no hace Monte Carlo.
+
+Cambios v1.1 (se mantienen):
+  - Formula de lambda usando attack/defense por sede.
     Si A juega de local:
       λ_A = avg_home_goals × attack_home_A × defense_away_B
       λ_B = avg_away_goals × attack_away_B × defense_home_A
-    Esto es la fórmula estándar de Dixon & Coles (1997).
-
   - HOME_ADVANTAGE eliminado del cálculo de lambdas.
     La ventaja local ya está implícita en attack_home vs attack_away
     y en defense_home vs defense_away. Aplicar un multiplicador
     adicional era el doble efecto del Bug 3.
-
-  - Sin seed fijo → resultados distintos en cada simulación.
-  - Sin clamp artificial → los lambdas normalizados no lo necesitan.
 """
 import numpy as np
-from collections import Counter
-from config import N_SIMULATIONS, LEAGUE_AVG_GOALS
+from scipy.stats import poisson as _poisson
+from config import LEAGUE_AVG_GOALS, MAX_GOALS_GRID, DIXON_COLES_RHO
 from model.match_context import MatchContext
 
 
@@ -42,6 +53,35 @@ def _get_avg(competition: str) -> tuple[float, float]:
     return avg, avg
 
 
+def _score_grid(lambda_a: float, lambda_b: float) -> np.ndarray:
+    """
+    Grilla de probabilidad P(goles_A=x, goles_B=y) para
+    x, y en [0, MAX_GOALS_GRID], con la correccion tau de
+    Dixon-Coles (1997) aplicada a los 4 marcadores bajos.
+
+    Sin la correccion, un Poisson bivariado independiente
+    (P(x,y) = Pois(x;λ_A) × Pois(y;λ_B)) tiende a des/sobreestimar
+    0-0, 1-0, 0-1 y 1-1 frente a lo que se observa en partidos
+    reales, porque el resultado parcial cambia como juegan los
+    equipos (un 0-0 no es tan independiente entre ambos lados
+    como en el resto de los marcadores).
+    """
+    xs = np.arange(MAX_GOALS_GRID + 1)
+    px = _poisson.pmf(xs, lambda_a)
+    py = _poisson.pmf(xs, lambda_b)
+    grid = np.outer(px, py)  # grid[x, y] = P(x) * P(y), independiente
+
+    rho = DIXON_COLES_RHO
+    grid[0, 0] *= 1 - lambda_a * lambda_b * rho
+    grid[0, 1] *= 1 + lambda_a * rho
+    grid[1, 0] *= 1 + lambda_b * rho
+    grid[1, 1] *= 1 - rho
+
+    grid = np.clip(grid, 0, None)  # por si rho lo manda negativo con λ extremos
+    grid /= grid.sum()             # renormalizar: tau cambia la masa total
+    return grid
+
+
 def simular(
     strength_a: dict,
     strength_b: dict,
@@ -50,7 +90,8 @@ def simular(
     verbose:    bool         = False,
 ) -> dict:
     """
-    Corre N_SIMULATIONS partidos con Poisson.
+    Calcula las probabilidades del partido con el modelo Dixon-Coles
+    (grilla de Poisson bivariado exacta, sin simulacion aleatoria).
 
     Parámetros:
         strength_a / strength_b → dicts devueltos por calcular_lambda()
@@ -124,35 +165,36 @@ def simular(
     print(f"  📤 λ final → A: {lambda_a:.3f} | B: {lambda_b:.3f} "
           f"| intensidad: {intensity}")
 
-    # ── Simulación ─────────────────────────────────────────────
-    rng     = np.random.default_rng()   # sin seed fijo
-    goles_a = rng.poisson(lambda_a, N_SIMULATIONS)
-    goles_b = rng.poisson(lambda_b, N_SIMULATIONS)
-    total   = goles_a + goles_b
+    # ── Grilla de probabilidad (Dixon-Coles) ────────────────────
+    grid = _score_grid(lambda_a, lambda_b)
+    xs   = np.arange(MAX_GOALS_GRID + 1)
+    X, Y = np.meshgrid(xs, xs, indexing="ij")  # X[i,j]=goles A, Y[i,j]=goles B
+    total = X + Y
 
     # ── Resultados ─────────────────────────────────────────────
-    v_a    = np.mean(goles_a > goles_b)
-    empate = np.mean(goles_a == goles_b)
-    v_b    = np.mean(goles_b > goles_a)
+    v_a    = grid[X > Y].sum()
+    empate = grid[X == Y].sum()
+    v_b    = grid[X < Y].sum()
 
-    marcadores = Counter(zip(goles_a.tolist(), goles_b.tolist()))
+    flat_order = np.argsort(-grid, axis=None)[:10]
+    top_idx    = np.unravel_index(flat_order, grid.shape)
     top10 = [
-        (f"{g[0]}-{g[1]}", round(c / N_SIMULATIONS * 100, 1))
-        for g, c in marcadores.most_common(10)
+        (f"{x}-{y}", round(float(grid[x, y]) * 100, 1))
+        for x, y in zip(*top_idx)
     ]
 
     ou = {
-        "over_05":  round(np.mean(total > 0.5)  * 100, 1),
-        "over_15":  round(np.mean(total > 1.5)  * 100, 1),
-        "over_25":  round(np.mean(total > 2.5)  * 100, 1),
-        "over_35":  round(np.mean(total > 3.5)  * 100, 1),
-        "under_05": round(np.mean(total <= 0.5) * 100, 1),
-        "under_15": round(np.mean(total <= 1.5) * 100, 1),
-        "under_25": round(np.mean(total <= 2.5) * 100, 1),
-        "under_35": round(np.mean(total <= 3.5) * 100, 1),
+        "over_05":  round(float(grid[total > 0.5].sum())  * 100, 1),
+        "over_15":  round(float(grid[total > 1.5].sum())  * 100, 1),
+        "over_25":  round(float(grid[total > 2.5].sum())  * 100, 1),
+        "over_35":  round(float(grid[total > 3.5].sum())  * 100, 1),
+        "under_05": round(float(grid[total <= 0.5].sum()) * 100, 1),
+        "under_15": round(float(grid[total <= 1.5].sum()) * 100, 1),
+        "under_25": round(float(grid[total <= 2.5].sum()) * 100, 1),
+        "under_35": round(float(grid[total <= 3.5].sum()) * 100, 1),
     }
 
-    btts_si = round(np.mean((goles_a > 0) & (goles_b > 0)) * 100, 1)
+    btts_si = round(float(grid[(X > 0) & (Y > 0)].sum()) * 100, 1)
 
     result = {
         # FIX Bug 2: redondear solo al mostrar, no internamente.

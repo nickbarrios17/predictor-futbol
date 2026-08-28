@@ -19,7 +19,18 @@ N_MATCHES = {
 }
 MAX_MONTHS_HISTORY = 30
 DECAY_RATE         = 0.08
-N_SIMULATIONS      = 10_000
+
+# ── Modelo de marcador (Dixon-Coles) ────────────────────────────
+# Grilla de probabilidad analitica en vez de simulacion Monte Carlo:
+# exacta (sin ruido aleatorio) y mas rapida. MAX_GOALS_GRID acota los
+# marcadores considerados (por encima de eso la probabilidad es
+# despreciable para lambdas de futbol reales).
+MAX_GOALS_GRID   = 10
+# Parametro de correlacion de baja puntuacion del paper original de
+# Dixon & Coles (1997) para la liga inglesa (~-0.13). Ajusta la
+# probabilidad de 0-0, 1-0, 0-1 y 1-1, que el Poisson independiente
+# por si solo sobre/subestima. No esta re-ajustado con datos propios.
+DIXON_COLES_RHO  = -0.13
 
 # ── Gemini ─────────────────────────────────────────────────────
 GEMINI_MODEL = "gemini-3.6-flash"
@@ -91,25 +102,24 @@ COMPETITION_WEIGHT = {
 }
 
 # ── Pesos por importancia del partido histórico ────────────────
-# FIX Bug 1: agregado "group_meaningless" que faltaba y causaba KeyError.
+# Solo quedan las categorias que get_stakes_weight() puede detectar
+# de verdad por texto (competicion/ronda). Habia mas categorias
+# (group_must_win, group_meaningless, qualifier_decisive, league_title,
+# league_relegation, league_meaningless, friendly_competitive,
+# friendly_rotation) que dependian de flags en match["context"], pero
+# ese dict siempre llega vacio desde la API (ver api_source.py) — nunca
+# se activaban con datos reales. Se sacaron para no sugerir una
+# sofisticacion que no existe.
 STAKES_WEIGHT = {
     "final":               1.00,
     "semifinal":           0.97,
     "quarterfinal":        0.94,
     "round_of_16":         0.91,
     "round_of_32":         0.88,
-    "group_must_win":      0.90,
     "group_stage":         0.75,
-    "group_meaningless":   0.45,   # ← AGREGADO: faltaba y causaba KeyError
-    "qualifier_decisive":  0.88,
     "qualifier_normal":    0.80,
-    "league_title":        0.88,
-    "league_relegation":   0.87,
     "league_normal":       0.80,
-    "league_meaningless":  0.45,
-    "friendly_competitive":0.50,
     "friendly_normal":     0.35,
-    "friendly_rotation":   0.20,
 }
 
 # ── Pesos por alineación ───────────────────────────────────────

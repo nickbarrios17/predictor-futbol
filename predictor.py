@@ -116,7 +116,7 @@ def predecir(
     )
 
     # ── 6. Simulación ─────────────────────────────────────────
-    print("\n🎲 Simulando 10.000 partidos...")
+    print("\n🎲 Calculando probabilidades (Dixon-Coles)...")
     resultado = simular(strength_a, strength_b,
                         venue=venue, context=context, verbose=verbose)
 
