@@ -166,15 +166,29 @@ def _render_modo_torneo() -> None:
         rondas = data["rounds"]
         st.success(f"🏆 {data['tournament_name']}")
 
+        # Nombre de la fase (ej. "Liga Profesional, Clausura") — lo
+        # mostramos junto a la fecha para que quede claro a qué
+        # torneo pertenece cuando la competición tiene fases
+        # separadas (Apertura/Clausura, etc.)
+        def _fase(r):
+            partidos = rondas[r]
+            return partidos[0]["competition"] if partidos else ""
+
         ronda_ids = list(rondas.keys())
         ronda_sel = st.selectbox(
             "Elegí la fecha",
             ronda_ids,
-            format_func=lambda r: (f"Fecha {r} ({len(rondas[r])} partidos)"
+            format_func=lambda r: (f"Fecha {r} — {_fase(r)} ({len(rondas[r])} partidos)"
                                    if r is not None else "Sin número de fecha"),
             key="fx_torneo_ronda_sel",
         )
         partidos_ronda = rondas[ronda_sel]
+
+        max_partidos = max(len(v) for v in rondas.values())
+        if len(partidos_ronda) < max_partidos:
+            st.caption("ℹ️ Esta fecha puede estar incompleta — la liga todavía no "
+                      "confirmó el horario de todos sus partidos. Los que faltan "
+                      "van a aparecer cuando se anuncien.")
 
         st.markdown(f"**Partidos de esta fecha ({len(partidos_ronda)}):**")
         preview = pd.DataFrame([
