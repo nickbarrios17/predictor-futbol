@@ -164,8 +164,10 @@ def simular(
 
     if verbose:
         result["lambdas_detalle"] = {
+            # "base" ya incluye la ventaja de sede (viene de attack_home
+            # vs attack_away / defense_home vs defense_away), no hay un
+            # paso "post sede" separado.
             "base":       (round(lam_a_base, 3), round(lam_b_base, 3)),
-            "post_sede":  (round(lam_a_base, 3), round(lam_b_base, 3)),
             "intensity":  intensity,
             "motivation": (ctx.motivation_factor("a"),
                            ctx.motivation_factor("b")),

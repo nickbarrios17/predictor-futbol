@@ -1,3 +1,4 @@
+streamlit
 numpy
 scipy
 pandas
@@ -5,6 +6,9 @@ httpx
 beautifulsoup4
 googlesearch-python
 requests
-ollama
+python-dotenv
+google-generativeai
 reportlab
 python-dateutil
+gspread
+google-auth

@@ -157,13 +157,18 @@ def fetch_matches(team_name: str,
     if force_refresh:
         clear_cache(team_id)
 
+    limit = N_MATCHES.get(team_type, N_MATCHES["default"])
+
     # Intentar caché
+    # El archivo de caché guarda el batch completo (limit+10, para tener
+    # margen de filtrado), así que hay que recortarlo igual que en el
+    # camino de cache-miss. Si no, un cache-hit devuelve mas partidos
+    # de los que team_type pide.
     cached = _read_cache(team_id)
     if cached is not None:
-        return cached
+        return cached[:limit]
 
     # Consultar API con paginación
-    limit   = N_MATCHES.get(team_type, N_MATCHES["default"])
     # Pedimos más de lo necesario para tener margen de filtrado
     matches = get_team_matches(team_id, limit=limit + 10)
 

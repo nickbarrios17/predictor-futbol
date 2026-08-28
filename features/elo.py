@@ -375,9 +375,13 @@ class EloRating:
             # Actualizar
             current_elo += ELO_K_FACTOR * (score - expected)
 
-        # Guardar rating actualizado
+            # Cachear el rating del rival (antes solo se guardaba el de
+            # la última iteración del loop, dejando afuera a todos los
+            # demás rivales procesados)
+            self._ratings[rival] = rival_elo
+
+        # Guardar rating actualizado del equipo
         self._ratings[team_name] = current_elo
-        self._ratings[rival]     = rival_elo   # actualizar también al rival
 
     def summary(self, team_name: str,
                 competition: str = "default") -> dict:

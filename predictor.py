@@ -1,4 +1,19 @@
-# predictor.py
+# predictor.py — v2.0
+"""
+Punto de entrada único del sistema.
+
+Fix Bug 2: save_prediction fue ELIMINADO de acá.
+El guardado ahora es responsabilidad exclusiva de app.py,
+después de que el usuario confirma que no es duplicado.
+"""
+import sys
+
+# Los prints de debug usan emojis; en Windows la consola por defecto
+# es cp1252 y no puede codificarlos, lo que crashea el proceso.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from data.fetcher           import fetch_matches
 from model.strength         import calcular_lambda
 from model.monte_carlo      import simular
@@ -6,13 +21,14 @@ from model.match_context    import MatchContext
 from agents.context_agent   import get_match_context
 from agents.analysis_agent  import generar_analisis
 from sources.web_source     import get_match_news
+from features.elo           import get_elo
 
 
 def _racha_resumen(strength: dict) -> str:
     return (
-        f"{strength['partidos_usados']} partidos analizados, "
-        f"promedio {strength['lambda_ataque']} goles a favor / "
-        f"{strength['lambda_defensa']} en contra (ponderado)."
+        f"{strength['partidos_usados']} partidos, "
+        f"ataque global {round(strength.get('attack_global', 0), 2)} / "
+        f"defensa global {round(strength.get('defense_global', 0), 2)}"
     )
 
 
@@ -23,9 +39,14 @@ def predecir(
     competition: str  = "",
     team_type:   str  = "default",
     verbose:     bool = False,
-    noticias:    str  = None,
 ) -> dict:
+    """
+    Predice el resultado de cualquier partido.
 
+    Devuelve el dict completo con probabilidades, lambdas,
+    historial, contexto y análisis de IA.
+    NO guarda en SQLite — eso lo hace app.py.
+    """
     print(f"\n{'='*54}")
     print(f"⚽  {equipo_a}  vs  {equipo_b}")
     if competition:
@@ -42,25 +63,32 @@ def predecir(
     if not matches_b:
         raise ValueError(f"No se encontraron partidos para '{equipo_b}'.")
 
-    # ── 2. Fuerzas ────────────────────────────────────────────
+    # ── 2. Elo (preprocesamiento — solo una vez por equipo) ───
+    print("\n📈 Actualizando Elo...")
+    elo = get_elo()
+    elo.update_from_matches(matches_a, equipo_a)
+    elo.update_from_matches(matches_b, equipo_b)
+
+    # ── 3. Fuerzas ────────────────────────────────────────────
     print("\n📐 Calculando fuerzas...")
     strength_a = calcular_lambda(matches_a, equipo_a, verbose=verbose)
     strength_b = calcular_lambda(matches_b, equipo_b, verbose=verbose)
 
-    print(f"  {equipo_a}: λ_ataque={strength_a['lambda_ataque']} "
-          f"λ_defensa={strength_a['lambda_defensa']} "
+    print(f"  {equipo_a}: Elo={strength_a.get('team_elo')} "
+          f"ataque={round(strength_a.get('attack_global',0),3)} "
+          f"defensa={round(strength_a.get('defense_global',0),3)} "
           f"({strength_a['partidos_usados']} partidos)")
-    print(f"  {equipo_b}: λ_ataque={strength_b['lambda_ataque']} "
-          f"λ_defensa={strength_b['lambda_defensa']} "
+    print(f"  {equipo_b}: Elo={strength_b.get('team_elo')} "
+          f"ataque={round(strength_b.get('attack_global',0),3)} "
+          f"defensa={round(strength_b.get('defense_global',0),3)} "
           f"({strength_b['partidos_usados']} partidos)")
 
-    # ── 3. Noticias ───────────────────────────────────────────
+    # ── 4. Noticias ───────────────────────────────────────────
     print("\n📰 Buscando noticias...")
-    if not noticias or len(noticias.strip()) < 50:
-        noticias = get_match_news(equipo_a, equipo_b, competition, n_urls=3)
+    noticias = get_match_news(equipo_a, equipo_b, competition, n_urls=3)
     print(f"  Total texto: {len(noticias)} caracteres")
 
-    # ── 4. Contexto estructurado ──────────────────────────────
+    # ── 5. Contexto ───────────────────────────────────────────
     print("\n🤖 Detectando contexto...")
     ctx_data = get_match_context(
         equipo_a, equipo_b,
@@ -70,54 +98,59 @@ def predecir(
         noticias    = noticias,
     )
     ctx_data["_noticias_chars"] = len(noticias)
-
-    context = MatchContext(
-        competition     = competition or "Unknown",
-        stage           = ctx_data.get("stage", "league_normal"),
-        motivation_a    = ctx_data.get("motivation_a", "normal"),
-        motivation_b    = ctx_data.get("motivation_b", "normal"),
-        is_second_leg   = ctx_data.get("is_second_leg", False),
-        first_leg_score = (
-            tuple(ctx_data["first_leg_score"])
-            if ctx_data.get("first_leg_score") else None
-        ),
-        notes    = ctx_data.get("notes", ""),
-        confidence = ctx_data.get("confidence", "low"),
-    )
     print(f"  Stage: {ctx_data.get('stage')} "
           f"(confianza: {ctx_data.get('confidence')})")
 
-    # ── 5. Simulación Monte Carlo ─────────────────────────────
-    # v1.1: simular() recibe los strength dicts completos.
-    # Calcula lambdas internamente con fórmula normalizada
-    # separada por local/visitante (Fix Bug 3 + Problema 1).
+    context = MatchContext(
+        competition     = competition or "Unknown",
+        stage           = ctx_data.get("stage",           "league_normal"),
+        motivation_a    = ctx_data.get("motivation_a",    "normal"),
+        motivation_b    = ctx_data.get("motivation_b",    "normal"),
+        is_second_leg   = ctx_data.get("is_second_leg",   False),
+        first_leg_score = (tuple(ctx_data["first_leg_score"])
+                           if ctx_data.get("first_leg_score") else None),
+        notes           = ctx_data.get("notes",           ""),
+        confidence      = ctx_data.get("confidence",      "low"),
+    )
+
+    # ── 6. Simulación ─────────────────────────────────────────
     print("\n🎲 Simulando 10.000 partidos...")
     resultado = simular(strength_a, strength_b,
                         venue=venue, context=context, verbose=verbose)
 
+    # ── 7. Análisis de IA ─────────────────────────────────────
+    print("\n🧠 Generando análisis de IA...")
+    try:
+        analisis_ia = generar_analisis(
+            resultado  = {**resultado,
+                          "equipo_a":    equipo_a,
+                          "equipo_b":    equipo_b,
+                          "context_raw": ctx_data,
+                          "strength_a":  strength_a,
+                          "strength_b":  strength_b},
+            matches_a  = matches_a,
+            matches_b  = matches_b,
+            noticias   = noticias,
+        )
+        print(f"  Predicción IA: {analisis_ia.get('prediccion')} "
+              f"| Coincide modelo: {analisis_ia.get('coincide_modelo')}")
+    except Exception as e:
+        print(f"  ⚠️  IA no disponible: {e}")
+        analisis_ia = {"error": str(e)}
+
+    # ── Ensamblar resultado ───────────────────────────────────
     resultado["equipo_a"]    = equipo_a
     resultado["equipo_b"]    = equipo_b
     resultado["venue"]       = venue
     resultado["context_raw"] = ctx_data
     resultado["strength_a"]  = strength_a
     resultado["strength_b"]  = strength_b
-    # Guardamos matches para pasarlos al analysis_agent
-    resultado["_matches_a"]  = matches_a
-    resultado["_matches_b"]  = matches_b
-    resultado["_noticias"]   = noticias
-
-    # ── 6. Análisis narrativo de la IA ────────────────────────
-    print("\n🧠 Generando análisis narrativo de la IA...")
-    analisis_ia = generar_analisis(
-        resultado  = resultado,
-        matches_a  = matches_a,
-        matches_b  = matches_b,
-        noticias   = noticias,
-    )
+    resultado["matches_a"]   = matches_a
+    resultado["matches_b"]   = matches_b
+    resultado["noticias"]    = noticias
     resultado["analisis_ia"] = analisis_ia
-    print(f"  Predicción IA: {analisis_ia.get('prediccion')} "
-          f"| Marcador: {analisis_ia.get('marcador_predicho')} "
-          f"| Coincide modelo: {analisis_ia.get('coincide_modelo')}")
+    # pred_id se asigna en app.py después del guardado
+    resultado["pred_id"]     = None
 
     return resultado
 

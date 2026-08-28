@@ -1,13 +1,12 @@
 # agents/context_agent.py
 """
-Usa Ollama (IA local y gratuita) para extraer el contexto
+Usa el proveedor de IA configurado para extraer el contexto
 del partido desde texto crudo de páginas web.
 """
 import json
 import re
-import ollama
 from sources.web_source import get_match_news, fetch_multiple, search_web
-from config import OLLAMA_MODEL
+from ai_provider import ask_ai
 
 
 def get_match_context(team_a: str, team_b: str,
@@ -84,12 +83,10 @@ Respond ONLY with valid JSON. No markdown, no extra text.
 """
 
     try:
-        response = ollama.chat(
-            model=OLLAMA_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.1},
-        )
-        raw = response["message"]["content"].strip()
+        # max_tokens mas alto que el default: los modelos Gemini nuevos
+        # gastan tokens de razonamiento interno antes de responder, y con
+        # textos de noticias largos el JSON puede quedar cortado.
+        raw = ask_ai(prompt, temperature=0.1, max_tokens=3000)
         result = _parse_json(raw)
 
         # Si la IA dejó stage en league_normal pero la competición
@@ -158,7 +155,7 @@ def _infer_stage_hint(competition: str) -> str | None:
 
     return None
 
-
+    
 def _parse_json(raw: str) -> dict:
     """Intenta parsear el JSON de la respuesta de la IA."""
     # Limpiar markdown si la IA lo incluyó

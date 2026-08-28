@@ -12,10 +12,10 @@ Recibe TODOS los datos ya calculados y produce:
 La IA NO usa su memoria de entrenamiento para inventar datos.
 Razona exclusivamente sobre lo que le pasamos.
 """
+
 import json
 import re
-import ollama
-from config import OLLAMA_MODEL
+from ai_provider import ask_ai
 
 
 # ─────────────────────────────────────────────────────────────
@@ -135,15 +135,13 @@ def _formato_lambdas_detalle(lambdas: dict, ea: str, eb: str) -> str:
         return "  Desglose no disponible."
 
     base    = lambdas.get("base",       ("?", "?"))
-    sede    = lambdas.get("post_sede",  ("?", "?"))
     intens  = lambdas.get("intensity",  "?")
     motiv   = lambdas.get("motivation", ("?", "?"))
     vuelta  = lambdas.get("second_leg", (1.0, 1.0))
     final   = lambdas.get("final",      ("?", "?"))
 
     return f"""
-  λ base (ataque × defensa rival) → {ea}: {base[0]}  |  {eb}: {base[1]}
-  Tras ventaja de sede             → {ea}: {sede[0]}  |  {eb}: {sede[1]}
+  λ base (ataque × defensa rival, ya incluye ventaja de sede) → {ea}: {base[0]}  |  {eb}: {base[1]}
   Multiplicador intensidad         → ×{intens} (finales bajan, grupos con presión suben)
   Multiplicador motivación         → {ea}: ×{motiv[0]}  |  {eb}: ×{motiv[1]}
   Multiplicador vuelta             → {ea}: ×{vuelta[0]}  |  {eb}: ×{vuelta[1]}
@@ -211,9 +209,9 @@ def generar_analisis(resultado: dict,
                              ea, eb, ctx, noticias)
 
     print("  🧠 IA generando análisis narrativo...")
-    raw = _llamar_ollama(brief)
+    raw = _llamar_gemini(brief)
     if raw is None:
-        return _error_response("Ollama no respondió")
+        return _error_response("Gemini no respondió")
 
     analisis = _parsear_respuesta(raw)
     if analisis.get("error"):
@@ -339,55 +337,69 @@ Mercados de goles:
 
 
 # ─────────────────────────────────────────────────────────────
-# LLAMADA A OLLAMA
+# LLAMADA A GEMINI
 # ─────────────────────────────────────────────────────────────
 
-def _llamar_ollama(brief: str) -> str | None:
-    prompt = f"""Sos un analista de fútbol experto. Analizá el siguiente partido
-usando EXCLUSIVAMENTE los datos que te proveo abajo.
-NO uses tu memoria de entrenamiento para inventar resultados,
-estadísticas, declaraciones o datos que no estén en el texto.
-Si algo no está en los datos, decilo explícitamente.
+def _llamar_gemini(brief: str) -> str | None:
+    prompt = f"""Sos un analista de fútbol experto.
+
+Analizá el partido utilizando EXCLUSIVAMENTE la información proporcionada.
+
+NO inventes:
+- estadísticas
+- lesiones
+- alineaciones
+- resultados previos
+- noticias
+
+Si algún dato no está presente, indicá que no está disponible.
 
 {brief}
 
-Basándote ÚNICAMENTE en los datos anteriores, respondé con este JSON.
-Todos los campos son obligatorios:
+Debés responder ÚNICAMENTE con JSON válido.
+
+Formato obligatorio:
 
 {{
-  "prediccion": "Victoria [nombre exacto del equipo]" o "Empate",
+  "prediccion": "Victoria [equipo]" o "Empate",
   "marcador_predicho": "X-Y",
-  "confianza": "alta" | "media" | "baja",
+  "confianza": "alta",
   "factores_clave": [
-    "Factor 1 — incluí el dato específico que lo respalda (mínimo 3, máximo 5)",
-    "Factor 2...",
-    "Factor 3..."
+    "factor 1",
+    "factor 2",
+    "factor 3"
   ],
-  "analisis": "Párrafo de 5-7 oraciones. Referenciá los lambdas, la racha, el rendimiento por sede, el desglose de ajustes del modelo y cualquier info de las noticias. Sé específico.",
-  "fortaleza_ofensiva_a": "Evaluación del ataque del primer equipo basada en su lambda, racha y stats por sede (1-2 oraciones)",
-  "fortaleza_ofensiva_b": "Ídem para el segundo equipo",
+  "analisis": "explicación completa",
+  "fortaleza_ofensiva_a": "texto",
+  "fortaleza_ofensiva_b": "texto",
   "mercados_recomendados": [
-    "Mercado específico con justificación basada en los datos (ej: Under 2.5 porque ambos lambdas son bajos y el partido es una final)"
+    "mercado 1"
   ],
   "advertencias": [
-    "Factor de incertidumbre importante si existe"
+    "advertencia 1"
   ]
 }}
 
-Respondé ÚNICAMENTE con el JSON válido. Sin texto antes ni después. Sin bloques ```."""
+NO uses markdown.
+NO uses ```json.
+Respondé solamente el JSON.
+"""
 
     try:
-        resp = ollama.chat(
-            model   = OLLAMA_MODEL,
-            messages= [{"role": "user", "content": prompt}],
-            options = {
-                "temperature": 0.3,
-                "num_predict": 1500,
-            },
+        # 4096 en vez de 1500: los modelos Gemini mas nuevos consumen
+        # tokens de razonamiento interno antes de emitir la respuesta,
+        # y con 1500 el JSON quedaba cortado a mitad de generar
+        # "analisis" (el campo mas largo del schema).
+        response = ask_ai(
+            prompt,
+            temperature=0.3,
+            max_tokens=4096
         )
-        return resp["message"]["content"].strip()
+
+        return response
+
     except Exception as e:
-        print(f"  ⚠️  Error Ollama: {e}")
+        print(f"  ⚠️ Error Gemini: {e}")
         return None
 
 
