@@ -310,10 +310,10 @@ def render_prediction_tab() -> None:
             for m in desglose:
                 sede = "🏠" if m["sede"]=="L" else "✈️"
                 gf, gc = m["goles"].split("-")
-                if m["sede"]=="L":
-                    icono = "✅" if int(gf)>int(gc) else ("➖" if int(gf)==int(gc) else "❌")
-                else:
-                    icono = "✅" if int(gc)>int(gf) else ("➖" if int(gc)==int(gf) else "❌")
+                # m["goles"] ya viene como "goles_a_favor-goles_en_contra"
+                # (ver strength.py), sin importar la sede. No hay que
+                # invertir la comparacion para los partidos de visitante.
+                icono = "✅" if int(gf)>int(gc) else ("➖" if int(gf)==int(gc) else "❌")
                 rows.append({
                     "Fecha":        m["fecha"],
                     "Rival":        m["rival"],
