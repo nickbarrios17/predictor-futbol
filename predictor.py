@@ -38,6 +38,7 @@ def predecir(
     venue:       str  = "neutral",
     competition: str  = "",
     team_type:   str  = "default",
+    match_date:  str  = "",
     verbose:     bool = False,
 ) -> dict:
     """
@@ -144,6 +145,7 @@ def predecir(
     resultado["equipo_a"]    = equipo_a
     resultado["equipo_b"]    = equipo_b
     resultado["venue"]       = venue
+    resultado["match_date"]  = match_date
     resultado["context_raw"] = ctx_data
     resultado["strength_a"]  = strength_a
     resultado["strength_b"]  = strength_b
