@@ -1,6 +1,14 @@
-# database/sqlite.py — v2.0 (bugs corregidos)
+# database/sqlite.py — v2.1 (soporte Turso)
 """
-Base de datos SQLite para historial de predicciones.
+Base de datos de predicciones. SQLite local por defecto; si están
+definidas TURSO_DATABASE_URL / TURSO_AUTH_TOKEN usa una base Turso
+(libSQL) remota en su lugar, para que el historial sobreviva a
+reinicios en hosting con almacenamiento efímero (ej. Streamlit Cloud).
+
+turso_serverless implementa DB-API 2.0 con la misma interfaz que
+sqlite3 (placeholders "?", Row con acceso por nombre, lastrowid,
+rowcount), asi que el resto de este archivo no necesita distinguir
+entre ambos backends.
 
 Fixes v2.0:
   Bug 1 — check_duplicates siempre retornaba has_similar=True
@@ -20,8 +28,17 @@ from typing import Optional
 
 DB_PATH = os.path.join("database", "predictions.db")
 
+TURSO_URL   = os.getenv("TURSO_DATABASE_URL")
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
-def get_connection() -> sqlite3.Connection:
+
+def get_connection():
+    if TURSO_URL:
+        import turso_serverless
+        conn = turso_serverless.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+        conn.row_factory = turso_serverless.Row
+        return conn
+
     os.makedirs("database", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
