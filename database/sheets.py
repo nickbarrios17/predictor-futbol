@@ -1,10 +1,16 @@
-# database/sheets.py - v2.1
+# database/sheets.py - v2.2
 """
 Sincronizacion con Google Sheets.
 
 Esta version verifica la escritura leyendo de vuelta la columna de IDs.
 Asi evitamos mostrar "sincronizado" cuando la hoja visible no recibio filas.
+
+Las credenciales se leen del archivo credentials.json si existe (uso
+local), o si no, del contenido JSON crudo en la variable de entorno
+GOOGLE_CREDENTIALS_JSON (uso en hosting sin filesystem persistente,
+ej. Streamlit Cloud secrets).
 """
+import json
 import os
 
 try:
@@ -62,13 +68,22 @@ COLUMNS = [
 def _get_client():
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("Instala gspread: pip install gspread google-auth")
-    if not os.path.exists(CREDS_PATH):
-        raise FileNotFoundError(
-            f"No se encontro {CREDS_PATH}. "
-            "Descarga las credenciales desde Google Cloud Console."
-        )
-    creds = Credentials.from_service_account_file(CREDS_PATH, scopes=SCOPES)
-    return gspread.authorize(creds)
+
+    if os.path.exists(CREDS_PATH):
+        creds = Credentials.from_service_account_file(CREDS_PATH, scopes=SCOPES)
+        return gspread.authorize(creds)
+
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        info = json.loads(creds_json)
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        return gspread.authorize(creds)
+
+    raise FileNotFoundError(
+        f"No se encontro {CREDS_PATH} ni la variable de entorno "
+        "GOOGLE_CREDENTIALS_JSON. Descarga las credenciales desde "
+        "Google Cloud Console."
+    )
 
 
 def _get_or_create_worksheet(client, tab_name: str):

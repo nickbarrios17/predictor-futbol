@@ -12,3 +12,4 @@ reportlab
 python-dateutil
 gspread
 google-auth
+turso-serverless

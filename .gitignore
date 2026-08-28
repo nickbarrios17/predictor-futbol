@@ -10,8 +10,9 @@ env/
 __pycache__/
 *.pyc
 
-# Carpetas de Streamlit/logs
-.streamlit/
+# Carpetas de Streamlit/logs (secrets.toml.example se permite explicitamente)
+.streamlit/*
+!.streamlit/secrets.toml.example
 
 credentials*.json
 cache/
