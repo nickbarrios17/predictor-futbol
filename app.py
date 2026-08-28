@@ -27,7 +27,7 @@ apply_global_styles()
 init_session_state()
 
 st.markdown("# ⚽ Predictor de Futbol")
-st.markdown("Modelo estadistico · Poisson + Monte Carlo + Gemini · v2.1")
+st.markdown("Modelo estadistico · Poisson + Dixon-Coles + Gemini · v2.2")
 
 tab_pred, tab_hist, tab_back, tab_wc = st.tabs([
     "🎯 Prediccion",
