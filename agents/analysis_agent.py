@@ -211,9 +211,10 @@ def generar_analisis(resultado: dict,
                              ea, eb, ctx, noticias)
 
     print("  🧠 IA generando análisis narrativo...")
-    raw = _llamar_gemini(brief)
+    raw, error = _llamar_gemini(brief)
     if raw is None:
-        return _error_response("Gemini no respondió")
+        detalle = f"Gemini no respondió ({error})" if error else "Gemini no respondió"
+        return _error_response(detalle)
 
     analisis = _parsear_respuesta(raw)
     if analisis.get("error"):
@@ -349,7 +350,7 @@ Mercados de goles:
 # LLAMADA A GEMINI
 # ─────────────────────────────────────────────────────────────
 
-def _llamar_gemini(brief: str) -> str | None:
+def _llamar_gemini(brief: str) -> tuple[str | None, str | None]:
     prompt = f"""Sos un analista de fútbol experto.
 
 Analizá el partido utilizando EXCLUSIVAMENTE la información proporcionada.
@@ -405,11 +406,11 @@ Respondé solamente el JSON.
             max_tokens=4096
         )
 
-        return response
+        return response, None
 
     except Exception as e:
         print(f"  ⚠️ Error Gemini: {e}")
-        return None
+        return None, str(e)
 
 
 # ─────────────────────────────────────────────────────────────

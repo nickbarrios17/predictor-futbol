@@ -33,7 +33,7 @@ MAX_GOALS_GRID   = 10
 DIXON_COLES_RHO  = -0.13
 
 # ── Gemini ─────────────────────────────────────────────────────
-GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # ── Caché ──────────────────────────────────────────────────────
 CACHE_DIR         = "cache"

@@ -2,7 +2,20 @@
 import requests
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from config import RAPIDAPI_KEY
+
+# Los timestamps de SofaScore son UTC (epoch). datetime.fromtimestamp()
+# sin tz usa la hora local del SERVIDOR que corre el proceso, no la de
+# Argentina — en Streamlit Cloud eso desfasa el horario mostrado. Se
+# fija explicitamente la zona horaria de Argentina para que el
+# horario sea el mismo sin importar donde este corriendo la app.
+AR_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+def _to_ar_time(ts: int) -> datetime:
+    return datetime.fromtimestamp(ts, tz=AR_TZ)
+
 
 BASE_URL = "https://sofascore.p.rapidapi.com"
 HEADERS = {
@@ -108,7 +121,7 @@ def _parse_match(m: dict) -> dict:
     Incluye todos los campos que necesitan strength.py y context.py.
     """
     ts         = m.get("startTimestamp", 0)
-    match_date = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    match_date = _to_ar_time(ts).strftime("%Y-%m-%d")
 
     # Nombre de la ronda (útil para detectar stakes)
     round_info = m.get("roundInfo", {})
@@ -229,10 +242,21 @@ def get_tournament_current_season_id(tournament_id: int) -> int | None:
 
 
 def get_tournament_fixtures(tournament_id: int, season_id: int,
-                            max_pages: int = 4) -> list[dict]:
+                            max_pages: int = 1) -> list[dict]:
     """
-    Obtiene los proximos partidos programados del torneo (todas las
-    fechas/rondas futuras que la API tenga cargadas).
+    Obtiene los proximos partidos programados del torneo.
+
+    OJO: a diferencia de /teams/get-last-matches, este endpoint NO
+    pagina de verdad — probado en vivo pidiendo hasta 20 paginas y
+    la pagina 1 en adelante siempre devuelve exactamente los mismos
+    eventos que la pagina 0. Es una ventana fija de ~30 proximos
+    partidos de TODO el torneo (no por equipo), asi que para una
+    fecha lejana puede traer solo los partidos que ya se movieron
+    dentro de esa ventana (ej. adelantados por TV) y no el resto,
+    aunque la liga ya los haya programado. No hay endpoint alternativo
+    para pedir una fecha puntual en este plan de la API (se probaron
+    >10 variantes). Pedir mas de 1 pagina solo gasta cuota sin traer
+    datos nuevos, por eso max_pages default = 1.
     """
     all_matches = []
     seen_ids    = set()
@@ -283,7 +307,7 @@ def get_tournament_fixtures(tournament_id: int, season_id: int,
 def _parse_upcoming_match(m: dict) -> dict:
     """Convierte un evento crudo de SofaScore (aun no jugado) a formato interno."""
     ts = m.get("startTimestamp", 0)
-    dt = datetime.fromtimestamp(ts)
+    dt = _to_ar_time(ts)
 
     round_info  = m.get("roundInfo", {})
     tournament  = m.get("tournament", {})
