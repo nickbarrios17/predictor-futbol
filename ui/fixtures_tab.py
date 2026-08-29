@@ -186,9 +186,11 @@ def _render_modo_torneo() -> None:
 
         max_partidos = max(len(v) for v in rondas.values())
         if len(partidos_ronda) < max_partidos:
-            st.caption("ℹ️ Esta fecha puede estar incompleta — la liga todavía no "
-                      "confirmó el horario de todos sus partidos. Los que faltan "
-                      "van a aparecer cuando se anuncien.")
+            st.caption("ℹ️ Esta fecha puede estar incompleta. La API solo expone una "
+                      "ventana fija de los próximos ~30 partidos de todo el torneo "
+                      "(no pagina más allá), así que en una fecha lejana puede faltar "
+                      "algún partido que la liga ya programó pero todavía no entró en "
+                      "esa ventana. Va a completarse solo a medida que se acerque.")
 
         st.markdown(f"**Partidos de esta fecha ({len(partidos_ronda)}):**")
         preview = pd.DataFrame([
