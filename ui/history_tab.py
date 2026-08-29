@@ -1,11 +1,15 @@
 # ui/history_tab.py
+from datetime import date
+
 import pandas as pd
 import streamlit as st
 
+from data.fixtures import fetch_match_result
 from database.sqlite import (
     delete_prediction,
     get_all_predictions,
     get_competitions,
+    get_pending_results,
     get_seasons,
     get_summary_stats,
     init_db,
@@ -78,6 +82,58 @@ def render_history_tab() -> None:
                 "Versión":      p.get("model_version","—"),
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ── Actualización automática de resultados ───────────────────
+    st.markdown("#### 🔄 Actualizar resultados automáticamente")
+    st.caption(
+        "Busca en la API el marcador final de las predicciones pendientes "
+        "cuya fecha ya pasó, usando el mismo historial que ya se cachea "
+        "para las predicciones. Lo que no encuentre queda para cargar a mano."
+    )
+    if st.button("🔄 Buscar resultados pendientes", use_container_width=True):
+        hoy = date.today().isoformat()
+        pendientes = [
+            p for p in get_pending_results()
+            if p.get("match_date") and p["match_date"] <= hoy
+        ]
+        if not pendientes:
+            st.info("No hay predicciones pendientes con fecha ya cumplida.")
+        else:
+            encontrados, sin_encontrar = 0, 0
+            with st.spinner(f"Revisando {len(pendientes)} partido(s)..."):
+                for p in pendientes:
+                    try:
+                        real = fetch_match_result(
+                            p["home_team"], p["away_team"], p["match_date"]
+                        )
+                    except Exception as e:
+                        real = None
+                        print(f"  ⚠️ Error buscando resultado de "
+                              f"{p['home_team']} vs {p['away_team']}: {e}")
+
+                    if real:
+                        metricas = load_result(
+                            p["id"], real["goals_home"], real["goals_away"]
+                        )
+                        try:
+                            update_result_row(p["id"], metricas)
+                        except Exception:
+                            pass
+                        encontrados += 1
+                    else:
+                        sin_encontrar += 1
+
+            if encontrados:
+                st.success(f"✅ {encontrados} resultado(s) cargados automáticamente.")
+            if sin_encontrar:
+                st.caption(
+                    f"ℹ️ {sin_encontrar} todavía no aparecen como jugados en "
+                    "la API — podés cargarlos a mano abajo."
+                )
+            if encontrados:
+                st.rerun()
 
     st.divider()
 
