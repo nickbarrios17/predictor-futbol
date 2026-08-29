@@ -1,6 +1,13 @@
-# model/strength.py — v1.2
+# model/strength.py — v1.3
 """
 Calcula la fuerza ofensiva y defensiva de un equipo.
+
+Cambios v1.3:
+  - FIX: usa elo.compute_rating() (puro) en vez de update_from_matches()
+    para el team_elo del propio equipo. Antes se llamaba una vez acá
+    adentro y otra vez desde predictor.py con el mismo historial,
+    aplicando el ajuste de Elo dos veces por predicción. Ver el
+    changelog de features/elo.py v1.3 para el detalle completo.
 
 Cambios v1.2:
   - Ajuste por calidad del rival usando Elo Rating (Mejora 1 del PDF).
@@ -69,9 +76,9 @@ def calcular_lambda(matches: list[dict], team_name: str,
     """
     elo = get_elo()
 
-    # Actualizar Elo con el historial del equipo antes de calcular
-    # (así el factor del rival es más preciso)
-    elo.update_from_matches(matches, team_name)
+    # Elo del propio equipo, calculado de forma pura a partir de ESTE
+    # historial (no muta estado compartido — ver FIX v1.3 en elo.py).
+    team_elo_raw = elo.compute_rating(matches, team_name)
 
     # Acumuladores separados por sede
     ataque_local_num  = 0.0; ataque_local_den  = 0.0
@@ -172,7 +179,7 @@ def calcular_lambda(matches: list[dict], team_name: str,
         defense_away = defense_global
 
     # Rating Elo del equipo (para mostrar en UI)
-    team_elo = round(elo.get_rating(team_name))
+    team_elo = round(team_elo_raw)
 
     resultado = {
         "team":            team_name,

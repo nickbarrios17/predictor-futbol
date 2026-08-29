@@ -1,10 +1,16 @@
-# predictor.py — v2.0
+# predictor.py — v2.1
 """
 Punto de entrada único del sistema.
 
 Fix Bug 2: save_prediction fue ELIMINADO de acá.
 El guardado ahora es responsabilidad exclusiva de app.py,
 después de que el usuario confirma que no es duplicado.
+
+Cambios v2.1:
+  - FIX: se sacó la actualización explícita de Elo de acá (llamaba a
+    elo.update_from_matches() para A y B). calcular_lambda() ya la hace
+    internamente, así que este paso quedaba duplicado — el ajuste de
+    Elo se aplicaba dos veces por predicción. Ver features/elo.py v1.3.
 """
 import sys
 
@@ -21,7 +27,6 @@ from model.match_context    import MatchContext
 from agents.context_agent   import get_match_context
 from agents.analysis_agent  import generar_analisis
 from sources.web_source     import get_match_news
-from features.elo           import get_elo
 
 
 def _racha_resumen(strength: dict) -> str:
@@ -64,13 +69,7 @@ def predecir(
     if not matches_b:
         raise ValueError(f"No se encontraron partidos para '{equipo_b}'.")
 
-    # ── 2. Elo (preprocesamiento — solo una vez por equipo) ───
-    print("\n📈 Actualizando Elo...")
-    elo = get_elo()
-    elo.update_from_matches(matches_a, equipo_a)
-    elo.update_from_matches(matches_b, equipo_b)
-
-    # ── 3. Fuerzas ────────────────────────────────────────────
+    # ── 2. Fuerzas (incluye el cálculo de Elo de cada equipo) ──
     print("\n📐 Calculando fuerzas...")
     strength_a = calcular_lambda(matches_a, equipo_a, verbose=verbose)
     strength_b = calcular_lambda(matches_b, equipo_b, verbose=verbose)
@@ -84,12 +83,12 @@ def predecir(
           f"defensa={round(strength_b.get('defense_global',0),3)} "
           f"({strength_b['partidos_usados']} partidos)")
 
-    # ── 4. Noticias ───────────────────────────────────────────
+    # ── 3. Noticias ───────────────────────────────────────────
     print("\n📰 Buscando noticias...")
     noticias = get_match_news(equipo_a, equipo_b, competition, n_urls=3)
     print(f"  Total texto: {len(noticias)} caracteres")
 
-    # ── 5. Contexto ───────────────────────────────────────────
+    # ── 4. Contexto ───────────────────────────────────────────
     print("\n🤖 Detectando contexto...")
     ctx_data = get_match_context(
         equipo_a, equipo_b,
@@ -116,12 +115,12 @@ def predecir(
         confidence      = ctx_data.get("confidence",      "low"),
     )
 
-    # ── 6. Simulación ─────────────────────────────────────────
+    # ── 5. Simulación ─────────────────────────────────────────
     print("\n🎲 Calculando probabilidades (Dixon-Coles)...")
     resultado = simular(strength_a, strength_b,
                         venue=venue, context=context, verbose=verbose)
 
-    # ── 7. Análisis de IA ─────────────────────────────────────
+    # ── 6. Análisis de IA ─────────────────────────────────────
     print("\n🧠 Generando análisis de IA...")
     try:
         analisis_ia = generar_analisis(

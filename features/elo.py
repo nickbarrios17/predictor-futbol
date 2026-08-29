@@ -1,14 +1,33 @@
-# features/elo.py — v1.2
+# features/elo.py — v1.3
 """
 Sistema de Elo Rating para ajustar la fuerza del rival.
 
 Estrategia de tres capas:
   1. Ratings base predefinidos para los ~150 equipos más conocidos
      (selecciones nacionales + clubes top europeos y sudamericanos).
-  2. Cálculo dinámico desde el historial: actualiza el rating base
-     a partir de los partidos que ya tenemos en caché.
+  2. Cálculo dinámico desde el historial: parte del rating base y lo
+     actualiza recorriendo los partidos que se le pasan a compute_rating().
   3. Fallback: si un equipo no está en ninguna lista, asigna
      el rating promedio de la competición donde juega.
+
+Cambios v1.3:
+  - FIX: update_from_matches() mutaba self._ratings, y se llamaba dos
+    veces por predicción con el mismo historial (una vez explícita en
+    predictor.py, otra vez dentro de calcular_lambda), aplicando el
+    ajuste de K-factor dos veces sobre los mismos partidos. Como
+    además _ratings vive en un singleton de módulo (toda la vida del
+    proceso de Streamlit), el team_elo de un equipo dependía de qué
+    otras predicciones se habían corrido antes en la misma sesión, y
+    el backtester (que llama calcular_lambda en loop con historiales
+    solapados) quedaba contaminado entre iteraciones — justo la fuga
+    de información que el walk-forward intenta evitar.
+  - Se reemplazó por compute_rating(matches, team_name): una función
+    pura que arranca de una copia local de BASE_RATINGS, recorre solo
+    los partidos recibidos, y devuelve el rating sin efectos
+    secundarios. Se pierde la idea de "el Elo aprende con el uso" de
+    una sesión a otra, pero esa capa nunca funcionó de verdad (el
+    singleton no persiste entre reinicios del proceso, y en Streamlit
+    Cloud el proceso se comparte entre usuarios).
 
 Uso del Elo en el modelo:
   opponent_factor = opponent_elo / competition_avg_elo
@@ -336,22 +355,34 @@ class EloRating:
         # Evita distorsiones extremas con rivales muy outliers
         return max(0.60, min(factor, 1.40))
 
-    def update_from_matches(self, matches: list[dict],
-                             team_name: str) -> None:
+    def compute_rating(self, matches: list[dict], team_name: str) -> float:
         """
-        Actualiza el rating del equipo a partir de su historial.
+        Calcula el rating del equipo a partir de su historial.
         Usa el algoritmo estándar de Elo.
 
+        Función pura: no muta self._ratings ni ningún otro estado
+        compartido. Arranca de una copia local de los ratings base y
+        recorre solo los partidos recibidos, así que llamarla varias
+        veces con el mismo historial siempre da el mismo resultado
+        (necesario para que el backtester sea reproducible y no filtre
+        información entre iteraciones del walk-forward).
+
         Solo actualiza si tenemos suficientes partidos (>= 5)
-        para que el rating converja a un valor significativo.
+        para que el rating converja a un valor significativo; con
+        menos, devuelve el rating base del equipo sin cambios.
         """
+        base_rating = self.get_rating(team_name)
         if len(matches) < 5:
-            return
+            return base_rating
+
+        # Copia local: los rivales que se vayan encontrando se cachean
+        # acá, nunca en self._ratings.
+        local_ratings = dict(self._ratings)
 
         # Ordenar de más viejo a más nuevo para actualizar en orden
         sorted_matches = sorted(matches, key=lambda m: m.get("date", ""))
 
-        current_elo = self.get_rating(team_name)
+        current_elo = base_rating
 
         for m in sorted_matches:
             es_local   = m.get("team_home") == team_name
@@ -362,7 +393,7 @@ class EloRating:
                           else m.get("goals_home", 0)) or 0
             comp       = m.get("competition", "default")
 
-            rival_elo  = self.get_rating(rival, comp)
+            rival_elo  = self._rating_from(local_ratings, rival, comp)
 
             # Score real: W=1, D=0.5, L=0
             if gf > gc:   score = 1.0
@@ -375,13 +406,22 @@ class EloRating:
             # Actualizar
             current_elo += ELO_K_FACTOR * (score - expected)
 
-            # Cachear el rating del rival (antes solo se guardaba el de
-            # la última iteración del loop, dejando afuera a todos los
-            # demás rivales procesados)
-            self._ratings[rival] = rival_elo
+            local_ratings[rival] = rival_elo
 
-        # Guardar rating actualizado del equipo
-        self._ratings[team_name] = current_elo
+        return current_elo
+
+    def _rating_from(self, ratings: dict[str, float], team_name: str,
+                     competition: str = "default") -> float:
+        """Como get_rating(), pero busca en el dict local que se le pasa."""
+        if team_name in ratings:
+            return ratings[team_name]
+
+        team_lower = team_name.lower()
+        for key, rating in ratings.items():
+            if key.lower() in team_lower or team_lower in key.lower():
+                return rating
+
+        return self.get_competition_avg(competition)
 
     def summary(self, team_name: str,
                 competition: str = "default") -> dict:
@@ -410,8 +450,10 @@ def _categoria(elo: float) -> str:
 
 
 # ── Instancia global (singleton) ──────────────────────────────
-# Se crea una sola vez y se reutiliza en toda la sesión.
-# Esto permite que update_from_matches() acumule mejoras.
+# Se crea una sola vez y se reutiliza en toda la sesión, pero solo
+# para lecturas puras (get_rating / get_competition_avg /
+# get_opponent_factor sobre BASE_RATINGS). compute_rating() no la
+# muta — ver el FIX v1.3 en el docstring del módulo.
 _elo_instance: EloRating | None = None
 
 
