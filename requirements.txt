@@ -1,15 +1,17 @@
-streamlit
-numpy
-scipy
-pandas
-httpx
-beautifulsoup4
-googlesearch-python
-requests
-python-dotenv
-google-generativeai
-reportlab
-python-dateutil
-gspread
-google-auth
-turso-serverless
+# Versiones pineadas al entorno probado. Tras cualquier bump, correr la
+# suite de tests (ver requirements-dev.txt) antes de deployar.
+streamlit==1.58.0
+numpy==2.4.6
+scipy==1.17.1
+pandas==3.0.3
+httpx==0.28.1
+beautifulsoup4==4.15.0
+googlesearch-python==1.3.0
+requests==2.33.1
+python-dotenv==1.2.2
+google-generativeai==0.8.6
+reportlab==4.5.1
+python-dateutil==2.9.0.post0
+gspread==6.2.1
+google-auth==2.49.2
+turso-serverless==0.1.0

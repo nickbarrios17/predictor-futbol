@@ -5,12 +5,15 @@ importancia de la ronda.
 """
 from config import COMPETITION_WEIGHT, STAKES_WEIGHT
 
+# Orden importa: "final" es substring de "semifinal" y "quarterfinal",
+# asi que esas rondas mas especificas se revisan primero para no
+# clasificar una semifinal/cuartos como si fuera la final.
 _ROUND_MAP = {
-    "final":            ["final"],
     "semifinal":        ["semi"],
     "quarterfinal":     ["quarter", "cuarto"],
     "round_of_16":      ["round of 16", "octavos", "last 16"],
     "round_of_32":      ["round of 32"],
+    "final":            ["final"],
     "group_stage":      ["group", "grupo", "matchday", "jornada"],
     "qualifier_normal": ["qualif", "clasif"],
     "friendly_normal":  ["friendly", "amistoso"],
