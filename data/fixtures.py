@@ -9,6 +9,7 @@ no cambia una vez jugado, pero un fixture futuro puede reprogramarse,
 y el fixture de un torneo entero es mucho más caro de pedir (∼1
 pedido por equipo de la fecha) así que conviene un caché más largo.
 """
+import difflib
 import os
 import json
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ from sources.api_source import (
     get_tournament_current_season_id,
     get_tournament_fixtures,
 )
-from data.fetcher import _best_match
+from data.fetcher import _best_match, fetch_matches
 from config import (
     CACHE_DIR,
     CACHE_HOURS_NEXT_MATCHES,
@@ -165,6 +166,69 @@ def fetch_tournament_fixtures(tournament_name: str,
         "tournament_name": torneo["name"],
         "rounds":          _agrupar_por_ronda(fixtures),
     }
+
+
+# ── Resultado real de un partido ya jugado ───────────────────────
+
+def fetch_match_result(home_team: str, away_team: str,
+                       match_date: str) -> dict | None:
+    """
+    Busca el marcador final de un partido ya jugado, para poder
+    cargar el resultado real de una predicción sin tipearlo a mano.
+
+    No usa un endpoint nuevo: reaprovecha el historial de partidos
+    finalizados del equipo local (el mismo que ya cachea data/fetcher.py
+    con TTL de 24h) y busca ahí el partido por fecha + rival. Si el
+    partido todavía no se jugó, o la API todavía no lo cargó como
+    finalizado, devuelve None.
+    """
+    if not match_date:
+        return None
+
+    matches = fetch_matches(home_team, team_type="default")
+    if not matches:
+        return None
+
+    mejor, mejor_score = None, -1.0
+    for m in matches:
+        if not _misma_fecha(m.get("date", ""), match_date):
+            continue
+        score = max(
+            _similar(m.get("team_home", ""), home_team)
+            + _similar(m.get("team_away", ""), away_team),
+            _similar(m.get("team_home", ""), away_team)
+            + _similar(m.get("team_away", ""), home_team),
+        )
+        if score > mejor_score:
+            mejor_score, mejor = score, m
+
+    # Umbral de similitud combinada de ambos equipos (~0.4 c/u en
+    # promedio, alcanza para nombres con acentos/abreviaturas distintas
+    # sin confundir partidos de la misma fecha entre otros equipos).
+    if mejor is None or mejor_score < 0.8:
+        return None
+
+    # La API puede haber invertido cuál es local; el marcador se
+    # devuelve relativo al home_team/away_team originales de la
+    # predicción, no al de la API.
+    if (_similar(mejor["team_home"], home_team)
+            >= _similar(mejor["team_home"], away_team)):
+        return {"goals_home": mejor["goals_home"], "goals_away": mejor["goals_away"]}
+    return {"goals_home": mejor["goals_away"], "goals_away": mejor["goals_home"]}
+
+
+def _similar(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a.strip().lower(), b.strip().lower()).ratio()
+
+
+def _misma_fecha(d1: str, d2: str) -> bool:
+    """Compara fechas con 1 día de margen (partidos cerca de medianoche)."""
+    try:
+        dt1 = datetime.strptime(d1, "%Y-%m-%d").date()
+        dt2 = datetime.strptime(d2, "%Y-%m-%d").date()
+        return abs((dt1 - dt2).days) <= 1
+    except ValueError:
+        return d1 == d2
 
 
 def _agrupar_por_ronda(fixtures: list[dict]) -> dict:
