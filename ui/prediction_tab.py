@@ -12,7 +12,7 @@ from database.sqlite import (
     save_prediction,
 )
 from database.sheets import append_prediction as sheets_append
-from sources.api_source import search_team
+from sources.football_data import search_team
 from ui.result_view import render_resultado
 
 

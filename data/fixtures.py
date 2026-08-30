@@ -14,7 +14,7 @@ import os
 import json
 from datetime import datetime, timezone
 
-from sources.api_source import (
+from sources.football_data import (
     search_team,
     get_team_next_matches,
     search_tournament,
