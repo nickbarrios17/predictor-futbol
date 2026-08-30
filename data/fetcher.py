@@ -14,7 +14,7 @@ import time
 import difflib
 from datetime import datetime, timezone
 
-from sources.api_source import search_team, get_team_matches
+from sources.football_data import search_team, get_team_matches
 from config import CACHE_DIR, CACHE_HOURS_TEAMS, N_MATCHES
 
 TEAMS_CACHE_DIR = os.path.join(CACHE_DIR, "teams")

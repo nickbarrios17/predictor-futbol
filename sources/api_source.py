@@ -1,4 +1,14 @@
-# sources/api_source.py
+# sources/api_source.py — v1.1
+"""
+Cambios v1.1:
+  - FIX: partidos de eliminatoria definidos por penales podían devolver
+    en homeScore/awayScore.current un valor que no son los goles reales
+    del partido (visto en vivo: 8-9 en un cruce de Copa Sudamericana
+    que terminó 0-0 en el marcador de la cancha). Se prefiere el campo
+    "normaltime" cuando está presente, y se descarta cualquier
+    marcador por encima de MAX_PLAUSIBLE_GOALS_PER_TEAM como dato
+    corrupto en vez de usarlo para calcular fuerzas.
+"""
 import requests
 import time
 from datetime import datetime
@@ -105,14 +115,46 @@ def get_team_matches(team_id: int, limit: int = 20) -> list[dict]:
     return all_matches[:limit]
 
 
+# Ningun partido de futbol real termina con los DOS equipos anotando
+# 6+ goles cada uno — eso sí es tipico de una tanda de penales (que
+# suele terminar cerca: 8-7, 9-8, etc.). Un tope generico por equipo
+# no sirve para detectar esto (8 y 9 son, cada uno por separado,
+# resultados posibles en una goleada real); lo que delata al dato
+# corrupto es el patron de AMBOS lados anotando alto a la vez. Visto
+# en vivo: River Plate 8-9 Independiente Santa Fe (Copa Sudamericana,
+# Round of 16) en un cruce que terminó 0-0 en las dos idas — la tanda
+# de penales terminó en el campo que debería tener los goles reales.
+MIN_GOALS_BOTH_SIDES_LOOKS_LIKE_SHOOTOUT = 6
+
+
+def _goals(score_obj: dict):
+    """
+    Goles reales del partido (tiempo regular + suplementario), sin la
+    tanda de penales. SofaScore expone "normaltime" para partidos que
+    llegaron a penales — preferirlo sobre "current" evita el problema
+    de arriba cuando ese campo está presente. Si no está, cae a
+    "current" como siempre.
+    """
+    value = score_obj.get("normaltime")
+    return value if value is not None else score_obj.get("current")
+
+
 def _is_valid(m: dict) -> bool:
-    """El partido tiene resultado completo."""
+    """El partido tiene resultado completo y un marcador plausible."""
     hs = m.get("homeScore", {})
     as_ = m.get("awayScore", {})
-    return (
-        hs.get("current") is not None
-        and as_.get("current") is not None
-    )
+    gh, ga = _goals(hs), _goals(as_)
+
+    if gh is None or ga is None:
+        return False
+
+    if (gh >= MIN_GOALS_BOTH_SIDES_LOOKS_LIKE_SHOOTOUT
+            and ga >= MIN_GOALS_BOTH_SIDES_LOOKS_LIKE_SHOOTOUT):
+        print(f"  ⚠️  Marcador inverosímil descartado: {gh}-{ga} "
+              f"({m.get('homeTeam', {}).get('name')} vs {m.get('awayTeam', {}).get('name')})")
+        return False
+
+    return True
 
 
 def _parse_match(m: dict) -> dict:
@@ -138,8 +180,8 @@ def _parse_match(m: dict) -> dict:
         "date":        match_date,
         "team_home":   m.get("homeTeam", {}).get("name", "Unknown"),
         "team_away":   m.get("awayTeam", {}).get("name", "Unknown"),
-        "goals_home":  m.get("homeScore", {}).get("current", 0),
-        "goals_away":  m.get("awayScore", {}).get("current", 0),
+        "goals_home":  _goals(m.get("homeScore", {})) or 0,
+        "goals_away":  _goals(m.get("awayScore", {})) or 0,
         "competition": competition,
         "category":    category,
         "round":       round_name,

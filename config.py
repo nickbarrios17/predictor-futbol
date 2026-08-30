@@ -1,4 +1,4 @@
-# config.py — v1.1
+# config.py — v1.2
 import os
 from dotenv import load_dotenv
 
@@ -9,6 +9,11 @@ if RAPIDAPI_KEY == "TU_CLAVE_REAL_ACA" or not RAPIDAPI_KEY:
     print("¡ALERTA! La variable RAPIDAPI_KEY no está cargada correctamente.")
 else:
     print("DEBUG: Clave detectada correctamente.")
+
+# ── API-Football (api-sports.io) — fuente primaria, con fallback a
+# RapidAPI/SofaScore cuando se agota la cuota diaria. Ver sources/football_data.py.
+API_FOOTBALL_KEY          = os.getenv("API_FOOTBALL_KEY", "")
+API_FOOTBALL_DAILY_LIMIT  = 100
 
 # ── Historial ──────────────────────────────────────────────────
 N_MATCHES = {
